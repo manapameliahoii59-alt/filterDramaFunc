@@ -1,0 +1,15 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Caches and test artifacts
+.pytest_cache/
+*.tmp
+
+# Environment variables & API Keys (DO NOT COMMIT)
+.env
+
+# OS files
+Thumbs.db
+Desktop.ini

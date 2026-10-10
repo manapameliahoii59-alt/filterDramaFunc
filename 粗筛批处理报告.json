@@ -1,0 +1,445 @@
+{
+  "summary": {
+    "total_count": 13,
+    "passed_count": 6,
+    "vetoed_count": 7,
+    "interception_rate": "53.8%",
+    "grade_distribution": {
+      "S": 6,
+      "A": 0,
+      "B": 0,
+      "C": 7
+    },
+    "veto_reasons_breakdown": {
+      "总集数不足35集": 2,
+      "第一集时长不足50秒": 1,
+      "沙雕表情包涂鸦漫": 1,
+      "严重注水车轱辘吵架": 1,
+      "缺乏戏剧对抗冲突": 1,
+      "缺失核心主角主体": 1,
+      "残留分镜提示词标签": 1
+    },
+    "total_cost_ms": 3.57,
+    "avg_cost_ms": 0.27
+  },
+  "results": [
+    {
+      "index": 1,
+      "title": "《战神归来：龙帅出狱》",
+      "passed": true,
+      "action": "PASS",
+      "grade": "S",
+      "composite_score": 91.3,
+      "dimension_scores": {
+        "visual_form": 88.0,
+        "spec_scale": 95.0,
+        "dialogue_density": 90.0,
+        "character_conflict": 92.0,
+        "audiovisual_quality": 95.0,
+        "trend_bonus": 0.0
+      },
+      "trend_evidence": {
+        "bonus_score": 0.0,
+        "matched_patterns": [],
+        "matched_reference_books": [],
+        "channel_bias": "通用",
+        "evidence_text": "未显著命中当前网文头部榜单大热风向"
+      },
+      "risk_level": "LOW",
+      "veto_reasons": [],
+      "diagnostics": [
+        "[潜力亮点] 极致情绪反差(入狱->战神) | 快节奏剧情推力 | 经典骨架(战神归来/打脸爽剧)"
+      ],
+      "cost_ms": 1.09,
+      "original_content": "《战神归来：龙帅出狱》[共80集|首集90秒]：三年之期已到，龙帅归位！江城苏家当年陷害我入狱，今天封锁全城机场，通知黑龙军团三千将士，随我奔赴苏家寿宴！"
+    },
+    {
+      "index": 2,
+      "title": "《豪门千金狂打脸》",
+      "passed": true,
+      "action": "PASS",
+      "grade": "S",
+      "composite_score": 91.3,
+      "dimension_scores": {
+        "visual_form": 88.0,
+        "spec_scale": 95.0,
+        "dialogue_density": 90.0,
+        "character_conflict": 92.0,
+        "audiovisual_quality": 95.0,
+        "trend_bonus": 0.0
+      },
+      "trend_evidence": {
+        "bonus_score": 0.0,
+        "matched_patterns": [],
+        "matched_reference_books": [],
+        "channel_bias": "通用",
+        "evidence_text": "未显著命中当前网文头部榜单大热风向"
+      },
+      "risk_level": "LOW",
+      "veto_reasons": [],
+      "diagnostics": [
+        "[潜力亮点] 极致情绪反差(夺走->亲子鉴定) | 带悬念钩子(真正) | 快节奏剧情推力 | 经典骨架(豪门恩怨/真假千金)"
+      ],
+      "cost_ms": 0.22,
+      "original_content": "《豪门千金狂打脸》[共85集|首集80秒]：你以为你伪造了这份亲子鉴定，就能夺走顾家的一切？睁大你的狗眼看清楚，真正执掌顾氏财团百分之五十一股权的人，是我！"
+    },
+    {
+      "index": 3,
+      "title": "《赘婿反击之潜龙在渊》",
+      "passed": true,
+      "action": "PASS",
+      "grade": "S",
+      "composite_score": 91.3,
+      "dimension_scores": {
+        "visual_form": 88.0,
+        "spec_scale": 95.0,
+        "dialogue_density": 90.0,
+        "character_conflict": 92.0,
+        "audiovisual_quality": 95.0,
+        "trend_bonus": 0.0
+      },
+      "trend_evidence": {
+        "bonus_score": 0.0,
+        "matched_patterns": [],
+        "matched_reference_books": [],
+        "channel_bias": "通用",
+        "evidence_text": "未显著命中当前网文头部榜单大热风向"
+      },
+      "risk_level": "LOW",
+      "veto_reasons": [],
+      "diagnostics": [
+        "[潜力亮点] 极致情绪反差(羞辱->百倍奉还) | 经典骨架(豪门恩怨/真假千金)"
+      ],
+      "cost_ms": 0.2,
+      "original_content": "《赘婿反击之潜龙在渊》[共60集|首集75秒]：三年入赘受尽江家白眼与羞辱，今天我林辰不再隐忍，林家欠我母亲的公道，今日百倍奉还！"
+    },
+    {
+      "index": 4,
+      "title": "《真假千金掉包案》",
+      "passed": true,
+      "action": "PASS",
+      "grade": "S",
+      "composite_score": 91.3,
+      "dimension_scores": {
+        "visual_form": 88.0,
+        "spec_scale": 95.0,
+        "dialogue_density": 90.0,
+        "character_conflict": 92.0,
+        "audiovisual_quality": 95.0,
+        "trend_bonus": 0.0
+      },
+      "trend_evidence": {
+        "bonus_score": 0.0,
+        "matched_patterns": [],
+        "matched_reference_books": [],
+        "channel_bias": "通用",
+        "evidence_text": "未显著命中当前网文头部榜单大热风向"
+      },
+      "risk_level": "LOW",
+      "veto_reasons": [],
+      "diagnostics": [
+        "[潜力亮点] 强反杀爽感(清算) | 强卡点信息差(亲笔供词,DNA) | 快节奏剧情推力 | 经典骨架(豪门恩怨/真假千金)"
+      ],
+      "cost_ms": 0.2,
+      "original_content": "《真假千金掉包案》[共70集|首集90秒]：十八年前掉包的恩怨，今天在法庭上彻底清算。法官大人，这是当年产房护士的亲笔供词和DNA原始采样记录！"
+    },
+    {
+      "index": 5,
+      "title": "《都市绝品医圣》",
+      "passed": true,
+      "action": "PASS",
+      "grade": "S",
+      "composite_score": 91.3,
+      "dimension_scores": {
+        "visual_form": 88.0,
+        "spec_scale": 95.0,
+        "dialogue_density": 90.0,
+        "character_conflict": 92.0,
+        "audiovisual_quality": 95.0,
+        "trend_bonus": 0.0
+      },
+      "trend_evidence": {
+        "bonus_score": 0.0,
+        "matched_patterns": [],
+        "matched_reference_books": [],
+        "channel_bias": "通用",
+        "evidence_text": "未显著命中当前网文头部榜单大热风向"
+      },
+      "risk_level": "LOW",
+      "veto_reasons": [],
+      "diagnostics": [
+        "[潜力亮点] 强反杀爽感(阎王) | 快节奏剧情推力 | 经典骨架(豪门恩怨/真假千金) | 微创新破局设定(九转金针)"
+      ],
+      "cost_ms": 0.2,
+      "original_content": "《都市绝品医圣》[共80集|首集85秒]：阎王要你三更死，我能留你到五更！九转金针在此，老夫人的心跳已经恢复，林家欠我的婚约，今日当场兑现！"
+    },
+    {
+      "index": 6,
+      "title": "《短命夭折剧》",
+      "passed": false,
+      "action": "VETO",
+      "grade": "C",
+      "composite_score": 55.3,
+      "dimension_scores": {
+        "visual_form": 88.0,
+        "spec_scale": 15.0,
+        "dialogue_density": 90.0,
+        "character_conflict": 92.0,
+        "audiovisual_quality": 95.0,
+        "trend_bonus": 0.0
+      },
+      "trend_evidence": {
+        "bonus_score": 0.0,
+        "matched_patterns": [],
+        "matched_reference_books": [],
+        "channel_bias": "通用",
+        "evidence_text": "未显著命中当前网文头部榜单大热风向"
+      },
+      "risk_level": "HIGH",
+      "veto_reasons": [
+        "DETECTED_FEW_EPISODES"
+      ],
+      "diagnostics": [
+        "[SpecDetector] 规格硬伤：总集数仅 15 集（未达 > 35 集商业硬门槛），体量过小无法形成商业变现闭环，判定为测试剧或夭折剧淘汰"
+      ],
+      "cost_ms": 0.16,
+      "original_content": "《短命夭折剧》[共15集|首集80秒]：当年江城苏家陷害我入狱，今天封锁全城，所有欠我的全部十倍奉还！"
+    },
+    {
+      "index": 7,
+      "title": "《腰斩中篇剧》",
+      "passed": false,
+      "action": "VETO",
+      "grade": "C",
+      "composite_score": 55.3,
+      "dimension_scores": {
+        "visual_form": 88.0,
+        "spec_scale": 15.0,
+        "dialogue_density": 90.0,
+        "character_conflict": 92.0,
+        "audiovisual_quality": 95.0,
+        "trend_bonus": 0.0
+      },
+      "trend_evidence": {
+        "bonus_score": 0.0,
+        "matched_patterns": [],
+        "matched_reference_books": [],
+        "channel_bias": "通用",
+        "evidence_text": "未显著命中当前网文头部榜单大热风向"
+      },
+      "risk_level": "HIGH",
+      "veto_reasons": [
+        "DETECTED_FEW_EPISODES"
+      ],
+      "diagnostics": [
+        "[SpecDetector] 规格硬伤：总集数仅 30 集（未达 > 35 集商业硬门槛），体量过小无法形成商业变现闭环，判定为测试剧或夭折剧淘汰"
+      ],
+      "cost_ms": 0.17,
+      "original_content": "《腰斩中篇剧》[共30集|首集80秒]：三年之期已到，龙帅归位！当年江城苏家陷害我入狱，今天封锁全城，百倍奉还！"
+    },
+    {
+      "index": 8,
+      "title": "《碎片快餐剧》",
+      "passed": false,
+      "action": "VETO",
+      "grade": "C",
+      "composite_score": 57.3,
+      "dimension_scores": {
+        "visual_form": 88.0,
+        "spec_scale": 25.0,
+        "dialogue_density": 90.0,
+        "character_conflict": 92.0,
+        "audiovisual_quality": 95.0,
+        "trend_bonus": 0.0
+      },
+      "trend_evidence": {
+        "bonus_score": 0.0,
+        "matched_patterns": [],
+        "matched_reference_books": [],
+        "channel_bias": "通用",
+        "evidence_text": "未显著命中当前网文头部榜单大热风向"
+      },
+      "risk_level": "HIGH",
+      "veto_reasons": [
+        "DETECTED_SHORT_EPISODE_1"
+      ],
+      "diagnostics": [
+        "[SpecDetector] 规格硬伤：第一集时长仅 35.0 秒（未达 > 50 秒硬门槛），剧情过于短碎缺乏戏剧展开，判定为劣质碎片物料淘汰"
+      ],
+      "cost_ms": 0.17,
+      "original_content": "《碎片快餐剧》[共60集|首集35秒]：三年之期已到，战神归位！当年江城苏家陷害我入狱，今天十倍奉还！"
+    },
+    {
+      "index": 9,
+      "title": "《极品家丁动态PPT漫》",
+      "passed": true,
+      "action": "PASS",
+      "grade": "S",
+      "composite_score": 91.3,
+      "dimension_scores": {
+        "visual_form": 88.0,
+        "spec_scale": 95.0,
+        "dialogue_density": 90.0,
+        "character_conflict": 92.0,
+        "audiovisual_quality": 95.0,
+        "trend_bonus": 0.0
+      },
+      "trend_evidence": {
+        "bonus_score": 0.0,
+        "matched_patterns": [],
+        "matched_reference_books": [],
+        "channel_bias": "通用",
+        "evidence_text": "未显著命中当前网文头部榜单大热风向"
+      },
+      "risk_level": "LOW",
+      "veto_reasons": [],
+      "diagnostics": [
+        "[潜力亮点] 极致情绪反差(入狱->龙帅) | 经典骨架(战神归来/打脸爽剧)"
+      ],
+      "cost_ms": 0.2,
+      "original_content": "《极品家丁动态PPT漫》[共80集|首集90秒]：三年之期已到，龙帅归位！当年江城苏家陷害我入狱，今天百倍奉还！"
+    },
+    {
+      "index": 10,
+      "title": "《沙雕修仙传：沙雕表情包漫》",
+      "passed": false,
+      "action": "VETO",
+      "grade": "C",
+      "composite_score": 49.4,
+      "dimension_scores": {
+        "visual_form": 15.0,
+        "spec_scale": 95.0,
+        "dialogue_density": 90.0,
+        "character_conflict": 92.0,
+        "audiovisual_quality": 95.0,
+        "trend_bonus": 0.0
+      },
+      "trend_evidence": {
+        "bonus_score": 8.0,
+        "matched_patterns": [
+          "家族修仙/词条长生流"
+        ],
+        "matched_reference_books": [
+          "仙道至尊：我有修仙面板",
+          "百岁修仙：从九转仙瓶开始",
+          "一百岁老头子，谁让你装嫩修仙了"
+        ],
+        "channel_bias": "男频",
+        "evidence_text": "命中【男频头部榜单热门风向】：[家族修仙/词条长生流] (同款爆款代表作: 《仙道至尊：我有修仙面板》, 《百岁修仙：从九转仙瓶开始》)，触发核心爽点标签: [修仙]"
+      },
+      "risk_level": "HIGH",
+      "veto_reasons": [
+        "DETECTED_ROUGH_DOODLE_OR_MEME"
+      ],
+      "diagnostics": [
+        "[SpecDetector] 品类硬伤：检测到明确标注为【沙雕表情包】，属于火柴人粗制草图涂鸦，直接一票否决淘汰"
+      ],
+      "cost_ms": 0.17,
+      "original_content": "《沙雕修仙传：沙雕表情包漫》[共80集|首集90秒]：三年入赘受尽江家白眼与羞辱，今天我林辰不再隐忍！"
+    },
+    {
+      "index": 11,
+      "title": "《无脑争吵注水剧》",
+      "passed": false,
+      "action": "VETO",
+      "grade": "C",
+      "composite_score": 22.9,
+      "dimension_scores": {
+        "visual_form": 88.0,
+        "spec_scale": 95.0,
+        "dialogue_density": 15.0,
+        "character_conflict": 25.0,
+        "audiovisual_quality": 95.0,
+        "trend_bonus": 0.0
+      },
+      "trend_evidence": {
+        "bonus_score": 0.0,
+        "matched_patterns": [],
+        "matched_reference_books": [],
+        "channel_bias": "通用",
+        "evidence_text": "未显著命中当前网文头部榜单大热风向"
+      },
+      "risk_level": "CRITICAL",
+      "veto_reasons": [
+        "DETECTED_LOW_INFORMATION_DENSITY",
+        "DETECTED_LACK_DRAMATIC_CONFLICT"
+      ],
+      "diagnostics": [
+        "[DensityDetector] 严重注水：检测到极低叙事信息密度（词汇多样性 TTR: 0.49，相邻句重复拉扯率: 100.0%），属于通篇车轱辘吵架复读、缺乏剧情推进的低质注水剧",
+        "[CharacterDetector] 缺乏戏剧矛盾冲突：全篇未检测到任何反派对立面、打压背叛或复仇对抗动作，属于平淡日常流水账，缺乏短剧基本张力"
+      ],
+      "cost_ms": 0.19,
+      "original_content": "《无脑争吵注水剧》[共80集|首集90秒]：你敢打我？我打你怎么了？你真的敢打我！我就是打你怎么了！好啊你敢打我，你死定了！打你怎么了，我就打你！"
+    },
+    {
+      "index": 12,
+      "title": "《青山绿水纯风景散文》",
+      "passed": false,
+      "action": "VETO",
+      "grade": "C",
+      "composite_score": 54.9,
+      "dimension_scores": {
+        "visual_form": 88.0,
+        "spec_scale": 95.0,
+        "dialogue_density": 90.0,
+        "character_conflict": 10.0,
+        "audiovisual_quality": 95.0,
+        "trend_bonus": 0.0
+      },
+      "trend_evidence": {
+        "bonus_score": 0.0,
+        "matched_patterns": [],
+        "matched_reference_books": [],
+        "channel_bias": "通用",
+        "evidence_text": "未显著命中当前网文头部榜单大热风向"
+      },
+      "risk_level": "HIGH",
+      "veto_reasons": [
+        "DETECTED_NO_CLEAR_PROTAGONIST"
+      ],
+      "diagnostics": [
+        "[CharacterDetector] 缺失核心主角：全篇未检测到主角实体、人称代词或角色代号，属于无人物散文或背景说明，非短剧戏剧物料"
+      ],
+      "cost_ms": 0.18,
+      "original_content": "《青山绿水纯风景散文》[共80集|首集90秒]：今天天气真好，远处的青山隐没在薄雾中，河水静静流淌，微风吹拂着树叶沙沙作响，阳光温暖地洒向广袤的森林。"
+    },
+    {
+      "index": 13,
+      "title": "《重生未清洗提示词剧》",
+      "passed": false,
+      "action": "VETO",
+      "grade": "C",
+      "composite_score": 59.3,
+      "dimension_scores": {
+        "visual_form": 88.0,
+        "spec_scale": 95.0,
+        "dialogue_density": 30.0,
+        "character_conflict": 92.0,
+        "audiovisual_quality": 95.0,
+        "trend_bonus": 0.0
+      },
+      "trend_evidence": {
+        "bonus_score": 0.0,
+        "matched_patterns": [
+          "疯批反派一起重生/修罗场流"
+        ],
+        "matched_reference_books": [
+          "她驯服的三千疯批一起重生了",
+          "重生后，我改扶小叔上青云",
+          "重生后，未来大佬成了我邻居"
+        ],
+        "channel_bias": "通用",
+        "evidence_text": "未显著命中当前网文头部榜单大热风向"
+      },
+      "risk_level": "HIGH",
+      "veto_reasons": [
+        "DETECTED_PROMPT_POLLUTION"
+      ],
+      "diagnostics": [
+        "[DensityDetector] 格式硬伤：残留未清洗的分镜提示词标签([镜头特写],[转场: 机场轰鸣])，属于未经清洗的低质工业草稿物料"
+      ],
+      "cost_ms": 0.18,
+      "original_content": "《重生未清洗提示词剧》[共80集|首集90秒]：[镜头特写] 三年之期已到，龙帅归位！[转场: 机场轰鸣] 场景: 江城苏家寿宴，黑龙军团随我奔赴苏家寿宴！"
+    }
+  ]
+}

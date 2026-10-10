@@ -1,0 +1,335 @@
+[
+  {
+    "book_meta": {
+      "title": "青山",
+      "author": "会说话的肘子",
+      "gender_expected": "男频（高难隐喻书名测试）"
+    },
+    "api_result": {
+      "elapsed_seconds": 5.13,
+      "response_id": "726048bb-9b6c-4448-9096-8ea6b9d5a1a1",
+      "usage": {
+        "prompt_tokens": 853,
+        "completion_tokens": 4000,
+        "total_tokens": 4853,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 3740
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 853
+      },
+      "raw_content": "{\"title\":\"青山\",\"author\":\"会说话的肘子\",\"track_and_audience\":{\"gender_track\":\"男频\",\"main_category\":\"都市异能/诡异复苏\",\"sub_category\":\"精神病院大佬+诡异降临+扮猪吃老虎\",\"target_audience\":\"18-35岁下沉男性中青年、男频网文与短剧核心用户，偏好诡异热血、逆袭打脸、发疯文学与身份反转\"},\"tone_and_intensity\":{\"narrative_pace\":\"快节奏，开篇即精神病院强冲突，每集强钩子与反转\",\"emotional_tone\":\"轻松发疯+诡异压迫+极致爽快打脸，夹杂肘子式幽默与热血救世\"},\"identity_contrast\":{\"surface_identity\":\"被关进青山精神病院的重度妄想症患者，被强制电击、注射、捆绑，遭医生与病友轻视\",\"hidden_identity\":\"穿越者/超凡禁忌/修仙大佬/镇压诡神的救世主\",\"contrast_gap\":\"从被绑在电击椅上的‘疯子’到随手捏爆诡神、让专家跪求的禁忌大佬，身份落差极端，打脸烈度顶级\"},\"opening_crisis_hook\":{\"conflict_type\":\"被",
+      "parsed_json": {
+        "title": "�ɽ",
+        "author": "�˵�",
+        "track_and_audience": {
+          "primary_track": "�Ƶ� / �Զ�",
+          "sub_track": "Ⱥ�Ѫ / �̸ / �ʽ�",
+          "audience": "18-35�Ϊ�Ԫ�ϰס�ɶ̾�̸�û�",
+          "adaptation": "�ʺϸı�Ϊ�ö̾硢�̸�Ԫ�硢Ⱥ�ɳ�"
+        },
+        "tone_and_intensity": {
+          "tone": "�й�̸+�ϲ�+Ⱥ�Ѫ+�Ƭ�",
+          "intensity": "�иߣ�ճ�ɳ�ѹ�ת�棬�ѹ�ȸ�Ц�㲢�",
+          "emotion_curve": "Ц�ɡ�ȼ�ů�С�ӣ�ÿ�ת"
+        },
+        "identity_contrast": {
+          "surface_identity": "�Ժ�/�ж�Ϊ�ͨ�/�Ե�",
+          "hidden_identity": "�ξ�ɽ�Ĺؼ�̳�/�쳣�ƾ�/�ϵ�",
+          "contrast_engine": "�ߡ�ߡ�ͨ�Դͷ֮�ݵ�"
+        },
+        "opening_crisis_hook": {
+          "crisis": "�ھ�Ժ�֪�ɽ�ڣ�ѷ�Ϲؼ�䣬�ʵ�ȴ�в�е�쳣�Ԥ�",
+          "hook": "�ɽ�ĺ�ﴥ�ξ�ʵ�׳�ҷ�ˣ�ˡ�ռ�",
+          "first_3_episodes": "�˫�첡ԺΧ�״ι�ɱ�һ�С�ƾֲ�ۣ�β�׳�ݷ�ת"
+        },
+        "payoff_mode": {
+          "core_payoff": "�Ϣ�+�ƽ�+�ݽ�+Ⱥ�ȳ�ԡ�ӡ�ӽǿ�Ƴ�޷�",
+          "payoff_rhythm": "�С�ת�ԪСˬ�㡢ÿ�ʻ�գ�ȳ�",
+          "emotional_payoff": "�߱�Ⱥ��ػ�Ƭ�γ�ǿ�"
+        },
+        "hierarchical_tropes": {
+          "L1_macro": [
+            "�",
+            "�Զ�",
+            "Ⱥ�ɳ�",
+            "�ػ�Ѫ"
+          ],
+          "L2_micro": [
+            "�Ժ�",
+            "�Ծ�",
+            "�ʵ�ξ�˫�",
+            "�",
+            "�;�",
+            "�Ի�",
+            "�Ϣ�",
+            "�̸",
+            "�Ŷ��",
+            "�ת�",
+            "�ݽ�",
+            "�Ƭ"
+          ]
+        },
+        "compliance_risk": {
+          "risk_points": [
+            "�񼲲�ҽ�Ƴ�",
+            "�״�ڡ�Դͷ�",
+            "�Ѫ�ȡ�ɱ�Բм�δ�˲�",
+            "�ʵҽ�Σ�Ϊģ�"
+          ],
+          "mitigation": [
+            "�Ժ�벡֢�鹹�Ӱ�ʵ�",
+            "�״�ڸ�Ϊ�컯�Ⱦ",
+            "�ף�Է�Χ�ͽ�Ѫ�ϸ�",
+            "ǿ�ꡢ�ػ�ֵ�רҵ�"
+          ],
+          "level": "�"
+        }
+      },
+      "reasoning_len": 5815
+    }
+  },
+  {
+    "book_meta": {
+      "title": "夜无疆",
+      "author": "辰东",
+      "gender_expected": "男频（极简冷酷书名测试）"
+    },
+    "api_result": {
+      "elapsed_seconds": 5.14,
+      "response_id": "c1df9e08-fca7-47d4-b99c-002113f050df",
+      "usage": {
+        "prompt_tokens": 853,
+        "completion_tokens": 2258,
+        "total_tokens": 3111,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 1644
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 853
+      },
+      "raw_content": "{\n  \"title\": \"夜无疆\",\n  \"author\": \"辰东\",\n  \"track_and_audience\": {\n    \"gender_track\": \"男频\",\n    \"main_category\": \"玄幻\",\n    \"sub_category\": \"永夜末世玄幻/黑暗修仙逆袭\",\n    \"target_audience\": \"男频玄幻核心读者、15-35岁男性网文受众、下沉市场中青年短剧用户\"\n  },\n  \"tone_and_intensity\": {\n    \"narrative_pace\": \"极致快节奏\",\n    \"emotional_tone\": \"悲壮热血与黑暗压抑交织，强情绪反杀与极致爽快\"\n  },\n  \"identity_contrast\": {\n    \"surface_identity\": \"在永夜降临中被家族视为废体、遭献祭抛弃的底层少年/罪血后裔\",\n    \"hidden_identity\": \"唯一能在永夜中点燃命灯的不灭者、上古禁忌传承者、黑暗纪元的天命之主\",\n    \"contrast_gap\": \"从被献祭弃子到执掌永夜纪元的唯一光明，身份反差极致，由举世皆敌到举世跪伏\"\n  },\n  \"opening_crisis_hook\": {\n    \"conflict_type\": \"永夜灭世/家族献祭/被夺血脉/逐出家门\",\n    \"crisis_description\": \"永夜骤然降临，城池沦陷，家族为求自保将主角作为祭品推入黑暗，夺其命灯、断其生路，主角在万鬼噬身中觉醒不灭灯火。\"\n  },\n  \"payoff_mode\": {\n    \"leverage\": \"神秘古灯/不灭命灯/禁忌功法/永夜唯一通行体质/认知差\",\n    \"core_payoff\": \"打脸虐渣、逆袭反杀、拯救苍生、独断万古、绝不原谅\"\n  },\n  \"hierarchical_tropes\": {\n    \"l1_macro_tropes\": [\n      \"#永夜末世\",\n      \"#逆天改命\",\n      \"#独断万古\",\n      \"#黑暗崛起\",\n      \"#守护苍生\"\n    ],\n    \"l2_micro_elements\": [\n      \"#永夜降临\",\n      \"#献祭亲子\",\n      \"#命灯觉醒\",\n      \"#断亲逐出\",\n      \"#抢夺血脉\",\n      \"#古碑传承\",\n      \"#万鬼噬身\",\n      \"#点燃不灭灯火\",\n      \"#禁区归来\",\n      \"#横推敌手\",\n      \"#举世皆敌\",\n      \"#全家悔恨跪求\"\n    ]\n  },\n  \"compliance_risk\": {\n    \"risk_level\": \"擦边预警\",\n    \"risk_reason\": \"包含永夜灭世、献祭、万鬼噬身等黑暗恐怖意象，短剧改编需弱化血腥与封建迷信式献祭仪式，避免过度恐怖渲染。\"\n  }\n}",
+      "parsed_json": {
+        "title": "夜无疆",
+        "author": "辰东",
+        "track_and_audience": {
+          "gender_track": "男频",
+          "main_category": "玄幻",
+          "sub_category": "永夜末世玄幻/黑暗修仙逆袭",
+          "target_audience": "男频玄幻核心读者、15-35岁男性网文受众、下沉市场中青年短剧用户"
+        },
+        "tone_and_intensity": {
+          "narrative_pace": "极致快节奏",
+          "emotional_tone": "悲壮热血与黑暗压抑交织，强情绪反杀与极致爽快"
+        },
+        "identity_contrast": {
+          "surface_identity": "在永夜降临中被家族视为废体、遭献祭抛弃的底层少年/罪血后裔",
+          "hidden_identity": "唯一能在永夜中点燃命灯的不灭者、上古禁忌传承者、黑暗纪元的天命之主",
+          "contrast_gap": "从被献祭弃子到执掌永夜纪元的唯一光明，身份反差极致，由举世皆敌到举世跪伏"
+        },
+        "opening_crisis_hook": {
+          "conflict_type": "永夜灭世/家族献祭/被夺血脉/逐出家门",
+          "crisis_description": "永夜骤然降临，城池沦陷，家族为求自保将主角作为祭品推入黑暗，夺其命灯、断其生路，主角在万鬼噬身中觉醒不灭灯火。"
+        },
+        "payoff_mode": {
+          "leverage": "神秘古灯/不灭命灯/禁忌功法/永夜唯一通行体质/认知差",
+          "core_payoff": "打脸虐渣、逆袭反杀、拯救苍生、独断万古、绝不原谅"
+        },
+        "hierarchical_tropes": {
+          "l1_macro_tropes": [
+            "#永夜末世",
+            "#逆天改命",
+            "#独断万古",
+            "#黑暗崛起",
+            "#守护苍生"
+          ],
+          "l2_micro_elements": [
+            "#永夜降临",
+            "#献祭亲子",
+            "#命灯觉醒",
+            "#断亲逐出",
+            "#抢夺血脉",
+            "#古碑传承",
+            "#万鬼噬身",
+            "#点燃不灭灯火",
+            "#禁区归来",
+            "#横推敌手",
+            "#举世皆敌",
+            "#全家悔恨跪求"
+          ]
+        },
+        "compliance_risk": {
+          "risk_level": "擦边预警",
+          "risk_reason": "包含永夜灭世、献祭、万鬼噬身等黑暗恐怖意象，短剧改编需弱化血腥与封建迷信式献祭仪式，避免过度恐怖渲染。"
+        }
+      },
+      "reasoning_len": 2593
+    }
+  },
+  {
+    "book_meta": {
+      "title": "嫡嫁千金",
+      "author": "千山茶客",
+      "gender_expected": "女频古言换身复仇（《墨雨云间》原著）"
+    },
+    "api_result": {
+      "elapsed_seconds": 5.1,
+      "response_id": "6ec4503a-d11a-4c21-bc72-95b8fbc31590",
+      "usage": {
+        "prompt_tokens": 857,
+        "completion_tokens": 2872,
+        "total_tokens": 3729,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 2208
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 857
+      },
+      "raw_content": "{\n  \"title\": \"嫡嫁千金\",\n  \"author\": \"千山茶客\",\n  \"track_and_audience\": {\n    \"gender_track\": \"女频\",\n    \"main_category\": \"古言\",\n    \"sub_category\": \"古言重生宅斗复仇/嫡女替嫁逆袭\",\n    \"target_audience\": \"18-35岁女性，偏好宅斗、重生、复仇、权谋、先虐后爽的古言受众，兼顾学生党与下沉女性短剧用户\"\n  },\n  \"tone_and_intensity\": {\n    \"narrative_pace\": \"快节奏，强冲突密集，每集设置反转与打脸节点\",\n    \"emotional_tone\": \"强情绪反杀，虐渣打脸，爽虐交织，绝不原谅\"\n  },\n  \"identity_contrast\": {\n    \"surface_identity\": \"被继母庶妹陷害、遭家族厌弃、被迫替嫁冲喜的落魄嫡女\",\n    \"hidden_identity\": \"重生归来的嫡女，身怀前世记忆与权谋手腕，背后有外祖/将门/顶级世家势力，终成掌权者\",\n    \"contrast_gap\": \"表面任人宰割的弃女，实则是步步为营的重生复仇者，身份与手段反差极强，开局越惨后期越爽\"\n  },\n  \"opening_crisis_hook\": {\n    \"conflict_type\": \"替嫁冲喜/被退婚/继母庶妹陷害/抢夺母亲遗物\",\n    \"crisis_description\": \"重生睁眼回到被继母庶妹陷害的订婚宴，母亲遗物被夺，婚约被抢，还被逼替嫁给传闻暴戾将死的王爷冲喜；若不从便按族规沉塘，前60秒生死一线，女主绝地反击。\"\n  },\n  \"payoff_mode\": {\n    \"leverage\": \"重生先知信息差+宅斗权谋手腕+隐藏外祖/将门势力+未来权臣夫君暗中相护\",\n    \"core_payoff\": \"打脸虐渣、权谋反杀、全家悔恨、绝不原谅，兼有夫君追妻火葬场\"\n  },\n  \"hierarchical_tropes\": {\n    \"l1_macro_tropes\": [\n      \"#嫡女重生\",\n      \"#宅斗复仇\",\n      \"#替嫁冲喜\",\n      \"#打脸虐渣\",\n      \"#权谋大女主\"\n    ],\n    \"l2_micro_elements\": [\n      \"#雨夜罚跪\",\n      \"#母亲遗物被夺\",\n      \"#被逼替嫁病王爷\",\n      \"#庶妹抢婚约\",\n      \"#继母伪善陷害\",\n      \"#灵堂反杀\",\n      \"#撕毁婚书\",\n      \"#掌掴庶妹\",\n      \"#外祖家撑腰\",\n      \"#夫君病中相护\",\n      \"#全家悔恨下跪\",\n      \"#绝不原谅\"\n    ]\n  },\n  \"compliance_risk\": {\n    \"risk_level\": \"安全\",\n    \"risk_reason\": \"合规安全\"\n  }\n}",
+      "parsed_json": {
+        "title": "嫡嫁千金",
+        "author": "千山茶客",
+        "track_and_audience": {
+          "gender_track": "女频",
+          "main_category": "古言",
+          "sub_category": "古言重生宅斗复仇/嫡女替嫁逆袭",
+          "target_audience": "18-35岁女性，偏好宅斗、重生、复仇、权谋、先虐后爽的古言受众，兼顾学生党与下沉女性短剧用户"
+        },
+        "tone_and_intensity": {
+          "narrative_pace": "快节奏，强冲突密集，每集设置反转与打脸节点",
+          "emotional_tone": "强情绪反杀，虐渣打脸，爽虐交织，绝不原谅"
+        },
+        "identity_contrast": {
+          "surface_identity": "被继母庶妹陷害、遭家族厌弃、被迫替嫁冲喜的落魄嫡女",
+          "hidden_identity": "重生归来的嫡女，身怀前世记忆与权谋手腕，背后有外祖/将门/顶级世家势力，终成掌权者",
+          "contrast_gap": "表面任人宰割的弃女，实则是步步为营的重生复仇者，身份与手段反差极强，开局越惨后期越爽"
+        },
+        "opening_crisis_hook": {
+          "conflict_type": "替嫁冲喜/被退婚/继母庶妹陷害/抢夺母亲遗物",
+          "crisis_description": "重生睁眼回到被继母庶妹陷害的订婚宴，母亲遗物被夺，婚约被抢，还被逼替嫁给传闻暴戾将死的王爷冲喜；若不从便按族规沉塘，前60秒生死一线，女主绝地反击。"
+        },
+        "payoff_mode": {
+          "leverage": "重生先知信息差+宅斗权谋手腕+隐藏外祖/将门势力+未来权臣夫君暗中相护",
+          "core_payoff": "打脸虐渣、权谋反杀、全家悔恨、绝不原谅，兼有夫君追妻火葬场"
+        },
+        "hierarchical_tropes": {
+          "l1_macro_tropes": [
+            "#嫡女重生",
+            "#宅斗复仇",
+            "#替嫁冲喜",
+            "#打脸虐渣",
+            "#权谋大女主"
+          ],
+          "l2_micro_elements": [
+            "#雨夜罚跪",
+            "#母亲遗物被夺",
+            "#被逼替嫁病王爷",
+            "#庶妹抢婚约",
+            "#继母伪善陷害",
+            "#灵堂反杀",
+            "#撕毁婚书",
+            "#掌掴庶妹",
+            "#外祖家撑腰",
+            "#夫君病中相护",
+            "#全家悔恨下跪",
+            "#绝不原谅"
+          ]
+        },
+        "compliance_risk": {
+          "risk_level": "安全",
+          "risk_reason": "合规安全"
+        }
+      },
+      "reasoning_len": 5377
+    }
+  },
+  {
+    "book_meta": {
+      "title": "真千金她是全能大佬",
+      "author": "卿浅",
+      "gender_expected": "女频现代豪门真假千金/马甲打脸"
+    },
+    "api_result": {
+      "elapsed_seconds": 5.14,
+      "response_id": "0f5b78db-47dc-47c3-b465-8786b567990e",
+      "usage": {
+        "prompt_tokens": 857,
+        "completion_tokens": 1507,
+        "total_tokens": 2364,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 992
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 857
+      },
+      "raw_content": "{\"title\":\"真千金她是全能大佬\",\"author\":\"卿浅\",\"track_and_audience\":{\"gender_track\":\"女频\",\"main_category\":\"都市/现言\",\"sub_category\":\"真假千金马甲/全能大佬逆袭\",\"target_audience\":\"偏好豪门真假千金、马甲掉马与打脸爽感的女性中青年，尤其下沉短剧女性用户\"},\"tone_and_intensity\":{\"narrative_pace\":\"极致快节奏\",\"emotional_tone\":\"极致爽快与强情绪反杀，打脸密集、绝不原谅\"},\"identity_contrast\":{\"surface_identity\":\"被抱错流落在外的乡下真千金，回归豪门后被当成土包子、冒牌货和家族耻辱\",\"hidden_identity\":\"全能大佬，医武双绝、顶级黑客、神秘财阀幕后、设计/医术/古武等多重马甲加身\",\"contrast_gap\":\"从被全家嫌弃、被假千金踩在脚底的乡巴佬，到各方势力跪求的全能大佬，身份反差拉满，每集掉马即打脸\"},\"opening_crisis_hook\":{\"conflict_type\":\"真假千金陷害/被逼签断绝关系书/替嫁/赶出家门\",\"crisis_description\":\"前60秒：真千金被认回豪门，假千金装柔弱当众泼脏水，父母偏信假千金，逼她下跪道歉、让出房间，甚至甩出断绝关系书逼她替嫁残疾老男人，雨夜将她赶出家门\"},\"payoff_mode\":{\"leverage\":\"隐藏马甲、专业技能、信息差、顶级人脉与神秘势力\",\"core_payoff\":\"打脸虐渣、全家悔恨、权谋反杀、绝不原谅\"},\"hierarchical_tropes\":{\"l1_macro_tropes\":[\"#真假千金\",\"#全能马甲\",\"#大女主逆袭\",\"#豪门打脸\",\"#断绝关系\"],\"l2_micro_elements\":[\"#真千金被换\",\"#乡下回归被嫌\",\"#假千金装白莲\",\"#全家偏心逼跪\",\"#逼签断绝关系书\",\"#替嫁残疾大佬\",\"#雨夜赶出家门\",\"#神医马甲掉马\",\"#黑客马甲震惊全场\",\"#豪门父母下跪求原谅\",\"#假千金身份曝光\",\"#夺回母亲遗物绝不原谅\"]},\"compliance_risk\":{\"risk_level\":\"安全\",\"risk_reason\":\"合规安全\"}}",
+      "parsed_json": {
+        "title": "真千金她是全能大佬",
+        "author": "卿浅",
+        "track_and_audience": {
+          "gender_track": "女频",
+          "main_category": "都市/现言",
+          "sub_category": "真假千金马甲/全能大佬逆袭",
+          "target_audience": "偏好豪门真假千金、马甲掉马与打脸爽感的女性中青年，尤其下沉短剧女性用户"
+        },
+        "tone_and_intensity": {
+          "narrative_pace": "极致快节奏",
+          "emotional_tone": "极致爽快与强情绪反杀，打脸密集、绝不原谅"
+        },
+        "identity_contrast": {
+          "surface_identity": "被抱错流落在外的乡下真千金，回归豪门后被当成土包子、冒牌货和家族耻辱",
+          "hidden_identity": "全能大佬，医武双绝、顶级黑客、神秘财阀幕后、设计/医术/古武等多重马甲加身",
+          "contrast_gap": "从被全家嫌弃、被假千金踩在脚底的乡巴佬，到各方势力跪求的全能大佬，身份反差拉满，每集掉马即打脸"
+        },
+        "opening_crisis_hook": {
+          "conflict_type": "真假千金陷害/被逼签断绝关系书/替嫁/赶出家门",
+          "crisis_description": "前60秒：真千金被认回豪门，假千金装柔弱当众泼脏水，父母偏信假千金，逼她下跪道歉、让出房间，甚至甩出断绝关系书逼她替嫁残疾老男人，雨夜将她赶出家门"
+        },
+        "payoff_mode": {
+          "leverage": "隐藏马甲、专业技能、信息差、顶级人脉与神秘势力",
+          "core_payoff": "打脸虐渣、全家悔恨、权谋反杀、绝不原谅"
+        },
+        "hierarchical_tropes": {
+          "l1_macro_tropes": [
+            "#真假千金",
+            "#全能马甲",
+            "#大女主逆袭",
+            "#豪门打脸",
+            "#断绝关系"
+          ],
+          "l2_micro_elements": [
+            "#真千金被换",
+            "#乡下回归被嫌",
+            "#假千金装白莲",
+            "#全家偏心逼跪",
+            "#逼签断绝关系书",
+            "#替嫁残疾大佬",
+            "#雨夜赶出家门",
+            "#神医马甲掉马",
+            "#黑客马甲震惊全场",
+            "#豪门父母下跪求原谅",
+            "#假千金身份曝光",
+            "#夺回母亲遗物绝不原谅"
+          ]
+        },
+        "compliance_risk": {
+          "risk_level": "安全",
+          "risk_reason": "合规安全"
+        }
+      },
+      "reasoning_len": 1776
+    }
+  }
+]

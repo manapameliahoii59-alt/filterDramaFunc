@@ -140,9 +140,72 @@ class PgNovelStorage:
                     cur.execute(create_table_sql)
                 conn.commit()
             print("[PgNovelStorage] PostgreSQL 表结构与 GIN 倒排索引初始化成功！")
+            # 自动注入全量字段与表结构中文备注
+            self.apply_database_comments()
             return True
         except Exception as e:
             print(f"[PgNovelStorage] 初始化表结构失败: {e}")
+            return False
+
+    def apply_database_comments(self) -> bool:
+        """
+        为 PostgreSQL 中的 crawled_ranking_books 和 novel_dna_records 表及其所有字段
+        注入标准的中文注释 (COMMENT ON TABLE / COLUMN)，支持在 Navicat/DBeaver 中清晰可视化
+        """
+        comments_sql = """
+        -- 表 1: crawled_ranking_books (全网实时在榜小说作品明细流水表)
+        COMMENT ON TABLE crawled_ranking_books IS '全网真实在榜小说作品实时明细表（四大平台14大快节奏榜单流水数据）';
+        COMMENT ON COLUMN crawled_ranking_books.id IS '自增唯一主键 ID';
+        COMMENT ON COLUMN crawled_ranking_books.book_id IS '原生平台书籍物理唯一ID（如起点1042108416，晋江10841540）';
+        COMMENT ON COLUMN crawled_ranking_books.title IS '作品标准书名（已清洗章节与非法前缀）';
+        COMMENT ON COLUMN crawled_ranking_books.author IS '真实作者笔名（100%全网创作者笔名，严禁占位符）';
+        COMMENT ON COLUMN crawled_ranking_books.platform IS '数据源平台（起点中文网 / 纵横中文网 / 晋江文学城 / 潇湘书院）';
+        COMMENT ON COLUMN crawled_ranking_books.channel IS '受众频道赛道（男频 / 女频）';
+        COMMENT ON COLUMN crawled_ranking_books.rank_name IS '所处快节奏榜单名称（月票榜 / 新晋作者榜 / 阅读榜 / 读者栽培榜等）';
+        COMMENT ON COLUMN crawled_ranking_books.rank_position IS '在榜名次排位（1~50 或 1~20）';
+        COMMENT ON COLUMN crawled_ranking_books.category IS '细分题材分类与核心风格标签';
+        COMMENT ON COLUMN crawled_ranking_books.intro IS '官方文案简介/核心人设与剧情梗概';
+        COMMENT ON COLUMN crawled_ranking_books.book_url IS '作品在原生平台的落地页官方URL';
+        COMMENT ON COLUMN crawled_ranking_books.heat_score IS '基于位次与榜单权重映射的大盘基础热度赋分（60.00~100.00）';
+        COMMENT ON COLUMN crawled_ranking_books.fetched_at IS '爬虫抓取落盘或Upsert更新时间戳';
+
+        -- 表 2: novel_dna_records (大盘网文 DNA 深度特征基因库表)
+        COMMENT ON TABLE novel_dna_records IS '大盘网文DNA深度特征基因库表（供短剧初筛加权打分匹配）';
+        COMMENT ON COLUMN novel_dna_records.id IS '自增唯一主键 ID';
+        COMMENT ON COLUMN novel_dna_records.book_key IS '唯一业务主键（{书名}_{作者}，防重保证）';
+        COMMENT ON COLUMN novel_dna_records.title IS '作品名称';
+        COMMENT ON COLUMN novel_dna_records.author IS '真实作者笔名';
+        COMMENT ON COLUMN novel_dna_records.source_platform IS '数据来源平台（起点/纵横/晋江/潇湘/番茄等）';
+        COMMENT ON COLUMN novel_dna_records.rank_name IS '所在核心榜单名称';
+        COMMENT ON COLUMN novel_dna_records.rank_position IS '榜单位次（1~100）';
+        COMMENT ON COLUMN novel_dna_records.board_type IS '榜单业务类型（NEW_TREND新晋潜力 / MONTHLY_HOT月度主力 / RETENTION_HOT高留存追读）';
+        COMMENT ON COLUMN novel_dna_records.heat_score IS '经方案B时效生命周期衰减后的有效大盘热度分（20.00~110.00）';
+        COMMENT ON COLUMN novel_dna_records.first_ranked_at IS '首次在榜探测日期';
+        COMMENT ON COLUMN novel_dna_records.last_ranked_at IS '最近一次探测在榜日期';
+        COMMENT ON COLUMN novel_dna_records.days_on_rank IS '累计在榜天数（生命周期衰减核心输入变量）';
+        COMMENT ON COLUMN novel_dna_records.is_currently_on_rank IS '当前是否在榜活跃（TRUE活跃 / FALSE跌出榜单）';
+        COMMENT ON COLUMN novel_dna_records.lifecycle_stage IS '时效生命周期阶段（方案B：EXPLODING爆发期0-10天 / MATURE成熟期11-30天 / SATURATED饱和期31-60天 / DEPRECATED过气淘汰>60天）';
+        COMMENT ON COLUMN novel_dna_records.gender_track IS '性别受众赛道（男频 / 女频，初筛第一道粗滤红线）';
+        COMMENT ON COLUMN novel_dna_records.main_category IS '主题材分类（都市 / 现言 / 古言 / 玄幻 / 科幻 / 悬疑）';
+        COMMENT ON COLUMN novel_dna_records.sub_category IS '细分赛道切角（真假千金断亲 / 战神出狱清算 / 词条修仙带飞全族 / 读心发疯吃瓜等）';
+        COMMENT ON COLUMN novel_dna_records.target_audience IS '核心目标读者受众画像描述';
+        COMMENT ON COLUMN novel_dna_records.l1_macro_tropes IS 'L1宏观母题标签数组（GIN倒排索引，微秒级重叠比对）';
+        COMMENT ON COLUMN novel_dna_records.l2_micro_elements IS 'L2微观剧情爽点与经典道具元素数组（GIN倒排索引）';
+        COMMENT ON COLUMN novel_dna_records.dna_profile IS '完整6维结构化深度基因分析JSONB（含人设断层、开局危机钩子、破局爽点杠杆）';
+        COMMENT ON COLUMN novel_dna_records.risk_level IS '广电微短剧合规风险等级（安全 / 擦边预警 / 违规高危）';
+        COMMENT ON COLUMN novel_dna_records.status IS '记录业务状态（active有效参与加权 / archived冷备归档）';
+        COMMENT ON COLUMN novel_dna_records.created_at IS '基因特征首次分析建档时间戳';
+        COMMENT ON COLUMN novel_dna_records.updated_at IS '基因或生命周期衰减最近一次更新时间戳';
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(comments_sql)
+                conn.commit()
+            print("[PgNovelStorage] PostgreSQL 表及全量字段中文注释 (COMMENT ON) 应用成功！")
+            return True
+        except Exception as e:
+            print(f"[PgNovelStorage] 应用表及字段注释失败: {e}")
             return False
 
     @staticmethod

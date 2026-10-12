@@ -1,7 +1,8 @@
 """
 novel_trends/crawlers/jinjiang_crawler.py
 晋江文学城 (Jinjiang) 真实榜单爬虫
-支持女频三大核心榜单：月度排行榜、新晋作者榜、完结金榜 (各 TOP 50)
+支持女频三大高频快节奏榜单：新晋作者榜、月度排行榜、读者栽培榜 (各 TOP 50)
+已剔除长周期完结金榜，聚焦 0~30 天新脑洞、当月大盘与高留存付费追更作品
 """
 import re
 from typing import List, Tuple
@@ -13,11 +14,11 @@ class JinjiangCrawler(BaseNovelCrawler):
     platform_name = "晋江文学城"
     channel = "女频"
 
-    # 三大核心榜单映射: (榜单中文名, 移动端路由路径, 题材分类标签)
+    # 三大核心快节奏榜单映射: (榜单中文名, 移动端路由路径, 题材分类标签)
     BOARDS: List[Tuple[str, str, str]] = [
-        ("月度排行榜", "/rank/naturalmore/5", "女频言情/纯爱月度爆款"),
         ("新晋作者榜", "/rank/naturalmore/29", "女频新人/新题材潜力爆款"),
-        ("完结金榜", "/rank/naturalmore/58", "女频高口碑完结长尾神作"),
+        ("月度排行榜", "/rank/naturalmore/5", "女频言情/纯爱月度爆款"),
+        ("读者栽培榜", "/rank/naturalmore/44", "女频高留存付费追更爆款"),
     ]
 
     def fetch_board(self, board_name: str, path: str, default_category: str, max_count: int = 50) -> List[NovelBook]:

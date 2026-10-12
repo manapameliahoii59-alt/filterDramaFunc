@@ -9,6 +9,10 @@ __pycache__/
 
 # Environment variables & API Keys (DO NOT COMMIT)
 .env
+auth.json
+*.har
+*dump*.json
+scratch/
 
 # OS files
 Thumbs.db

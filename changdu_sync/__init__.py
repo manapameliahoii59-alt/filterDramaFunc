@@ -5,6 +5,7 @@ changdu_sync 包
 from .stealth import STEALTH_INIT_SCRIPT, browser_context_kwargs
 from .login import run_changdu_login
 from .client import ChangduSyncClient, export_dramas_to_txt
+from .detail_fetcher import ChangduDetailFetcher, DramaDetailMaterial
 
 __all__ = [
     "STEALTH_INIT_SCRIPT",
@@ -12,4 +13,6 @@ __all__ = [
     "run_changdu_login",
     "ChangduSyncClient",
     "export_dramas_to_txt",
+    "ChangduDetailFetcher",
+    "DramaDetailMaterial",
 ]

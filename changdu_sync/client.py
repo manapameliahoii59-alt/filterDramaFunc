@@ -15,7 +15,8 @@ from .stealth import (
     SHORT_PLAY_LIST_URL,
     LAUNCH_ARGS,
     STEALTH_INIT_SCRIPT,
-    browser_context_kwargs
+    browser_context_kwargs,
+    launch_playwright_browser,
 )
 
 SERIES_LIST_PATH = "/novelsale/distributor/content/series/list/v1/"
@@ -50,28 +51,57 @@ class ChangduSyncClient:
             raise FileNotFoundError(f"未找到登录凭证文件: {self.auth_file}，请先执行登录")
 
         self._pw = sync_playwright().start()
-        self.browser = self._pw.chromium.launch(
-            headless=self.headless,
-            args=list(LAUNCH_ARGS),
-        )
+        self.browser = launch_playwright_browser(self._pw, headless=self.headless)
         self.context = self.browser.new_context(
             **browser_context_kwargs(storage_state=str(self.auth_file))
         )
         self.page = self.context.new_page()
         self.page.add_init_script(STEALTH_INIT_SCRIPT)
 
-        # 校验登录 Cookie
+        # 校验并提取登录标识
         cookies = self.context.cookies()
         self.ad_user_id = next((c["value"] for c in cookies if c["name"] == "adUserId"), None)
         self.root_ad_user_id = next((c["value"] for c in cookies if c["name"] == "rootAdUserId"), None)
 
+        # 容错：若 Cookie 因过期被丢弃，从 auth.json 本地补充并注入有效 Cookie
         if not self.ad_user_id or not self.root_ad_user_id:
-            self.close()
-            raise RuntimeError("凭证中缺少 adUserId/rootAdUserId，登录态已过期，请重新登录")
+            try:
+                with open(self.auth_file, "r", encoding="utf-8") as f:
+                    auth_json_data = json.load(f)
+                    for c in auth_json_data.get("cookies", []):
+                        if c.get("name") == "adUserId" and not self.ad_user_id:
+                            self.ad_user_id = c.get("value")
+                        elif c.get("name") == "rootAdUserId" and not self.root_ad_user_id:
+                            self.root_ad_user_id = c.get("value")
+                # 重新为上下文注入长期有效的 adUserId 与 rootAdUserId
+                if self.ad_user_id and self.root_ad_user_id:
+                    self.context.add_cookies([
+                        {"name": "adUserId", "value": str(self.ad_user_id), "domain": "www.changdupingtai.com", "path": "/"},
+                        {"name": "rootAdUserId", "value": str(self.root_ad_user_id), "domain": "www.changdupingtai.com", "path": "/"},
+                    ])
+            except Exception:
+                pass
 
         # 访问首页并等待字节 secsdk 签名劫持就绪
         self.page.goto(HOME_URL, timeout=60_000, wait_until="load")
         self._wait_secsdk_ready()
+
+        # 再次兜底：若仍未获取到，通过 session 访问 login/v1 自动获取商户信息
+        if not self.ad_user_id or not self.root_ad_user_id:
+            try:
+                login_info = self.page.evaluate("""async () => {
+                    const res = await fetch('/novelsale/distributor/login/v1/', { credentials: 'include' });
+                    return res.json();
+                }""")
+                acc = (login_info.get("ad_account") or {})
+                self.ad_user_id = str(acc.get("ad_user_id") or "")
+                self.root_ad_user_id = str(acc.get("root_ad_user_id") or "")
+            except Exception:
+                pass
+
+        if not self.ad_user_id or not self.root_ad_user_id:
+            self.close()
+            raise RuntimeError("凭证中缺少 adUserId/rootAdUserId，登录态已过期，请重新登录")
 
         # 解析商户应用包配置
         self.app_info = self._resolve_app_info()

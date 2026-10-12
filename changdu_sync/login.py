@@ -11,7 +11,8 @@ from .stealth import (
     HOME_URL,
     LAUNCH_ARGS,
     STEALTH_INIT_SCRIPT,
-    browser_context_kwargs
+    browser_context_kwargs,
+    launch_playwright_browser,
 )
 
 SALE_URL_PATTERN = "**/sale/**"
@@ -31,10 +32,7 @@ def run_changdu_login(auth_file: Path | str) -> str:
 
     try:
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(
-                headless=False,
-                args=list(LAUNCH_ARGS),
-            )
+            browser = launch_playwright_browser(playwright, headless=False)
             context = browser.new_context(**browser_context_kwargs())
             page = context.new_page()
             page.add_init_script(STEALTH_INIT_SCRIPT)

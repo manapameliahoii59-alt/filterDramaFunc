@@ -151,3 +151,38 @@ def browser_context_kwargs(storage_state: str | None = None) -> Dict[str, Any]:
     if storage_state:
         kwargs["storage_state"] = storage_state
     return kwargs
+
+
+def launch_playwright_browser(pw, headless: bool = True, extra_args: list | None = None):
+    """
+    自适应启动浏览器：优先启动系统原生 Google Chrome（拟真度与反爬最强），
+    若无 Chrome 则自适应回退到已安装的 Chromium 或 Edge。
+    """
+    import os
+    from pathlib import Path
+    args = list(LAUNCH_ARGS) + (extra_args or [])
+
+    # 1. 优先使用系统原生 Google Chrome
+    try:
+        return pw.chromium.launch(channel="chrome", headless=headless, args=args)
+    except Exception:
+        pass
+
+    # 2. 尝试系统已下载的 Chromium 目录
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    if local_app_data:
+        chromes = sorted(Path(local_app_data).glob("ms-playwright/chromium-*/chrome-win64/chrome.exe"))
+        if chromes:
+            try:
+                return pw.chromium.launch(executable_path=str(chromes[-1]), headless=headless, args=args)
+            except Exception:
+                pass
+
+    # 3. 尝试 Edge
+    try:
+        return pw.chromium.launch(channel="msedge", headless=headless, args=args)
+    except Exception:
+        pass
+
+    # 4. 默认 Chromium
+    return pw.chromium.launch(headless=headless, args=args)

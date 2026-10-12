@@ -84,6 +84,21 @@ class NovelCacheManager:
             existing.rank_name = new_book.rank_name
             if new_book.intro and new_book.intro.strip():
                 existing.intro = new_book.intro.strip()
+            
+            # 同步更新真实作者：若新作者有效或旧作者为占位符，立即更新
+            placeholder_authors = {
+                "起点知名作家", "起点白金/大神作家", "起点作家",
+                "晋江知名作者", "晋江签约作者", "纵横作家", "纵横签约作家",
+                "潇湘作家", "潇湘知名作家", "未知作者", "未知", ""
+            }
+            if new_book.author and (new_book.author not in placeholder_authors or existing.author in placeholder_authors):
+                existing.author = new_book.author
+            if new_book.book_url:
+                existing.book_url = new_book.book_url
+            if new_book.category:
+                existing.category = new_book.category
+            if new_book.heat_score:
+                existing.heat_score = new_book.heat_score
             return False
         else:
             # 首次入库或此前未分析过

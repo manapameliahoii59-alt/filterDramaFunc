@@ -48,7 +48,7 @@ def main():
     )
 
     # 2. 将抓取到的全量真实榜单数据同步存入 PostgreSQL 远程数据库
-    all_crawled_books = list(cache.kb.books.values())
+    all_crawled_books = sync_service.all_crawled_books if sync_service.all_crawled_books else list(cache.kb.books.values())
     saved_pg = pg_storage.save_crawled_books(all_crawled_books)
     print(f"\n[PostgreSQL 实时入库] 已将 {saved_pg} 部四大平台榜单作品同步入库至远程 PostgreSQL (crawled_ranking_books)！")
 

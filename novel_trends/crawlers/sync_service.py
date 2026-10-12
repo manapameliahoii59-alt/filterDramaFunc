@@ -21,6 +21,7 @@ class NovelSyncService:
         self.zongheng_crawler = ZonghengCrawler()
         self.jinjiang_crawler = JinjiangCrawler()
         self.xiaoxiang_crawler = XiaoxiangCrawler()
+        self.all_crawled_books: List[NovelBook] = []
 
     def sync_all_platforms(
         self,
@@ -38,6 +39,7 @@ class NovelSyncService:
         针对潇湘书院专项抓取：潇湘票榜、畅销榜、完结榜、阅读榜、收藏榜 各 TOP 20
         返回: (抓取总数, 新发现需分析书籍数, 新书籍列表)
         """
+        self.all_crawled_books = []
         total_fetched = 0
         new_books: List[NovelBook] = []
 
@@ -53,6 +55,7 @@ class NovelSyncService:
                 board_books = self.qidian_crawler.fetch_board(board_name, slug, max_count=qidian_top_per_board)
                 print(f" 成功抓取 {len(board_books)} 部")
                 total_fetched += len(board_books)
+                self.all_crawled_books.extend(board_books)
                 for book in board_books:
                     is_new = self.cache.add_or_update_book(book)
                     if is_new:
@@ -68,6 +71,7 @@ class NovelSyncService:
                 board_books = self.zongheng_crawler.fetch_board(board_name, rank_type, max_count=zongheng_top_per_board)
                 print(f" 成功抓取 {len(board_books)} 部")
                 total_fetched += len(board_books)
+                self.all_crawled_books.extend(board_books)
                 for book in board_books:
                     is_new = self.cache.add_or_update_book(book)
                     if is_new:
@@ -83,6 +87,7 @@ class NovelSyncService:
                 board_books = self.jinjiang_crawler.fetch_board(board_name, path, category, max_count=jinjiang_top_per_board)
                 print(f" 成功抓取 {len(board_books)} 部")
                 total_fetched += len(board_books)
+                self.all_crawled_books.extend(board_books)
                 for book in board_books:
                     is_new = self.cache.add_or_update_book(book)
                     if is_new:
@@ -98,6 +103,7 @@ class NovelSyncService:
                 board_books = self.xiaoxiang_crawler.fetch_board(board_name, section_idx=section_idx, max_count=xiaoxiang_top_per_board)
                 print(f" 成功抓取 {len(board_books)} 部")
                 total_fetched += len(board_books)
+                self.all_crawled_books.extend(board_books)
                 for book in board_books:
                     is_new = self.cache.add_or_update_book(book)
                     if is_new:

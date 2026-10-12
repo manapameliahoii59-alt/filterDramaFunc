@@ -320,6 +320,89 @@ class PgNovelStorage:
         except Exception:
             return 0
 
+    def save_crawled_books(self, books: List[Any]) -> int:
+        """
+        批量将四大平台抓取到的实时榜单作品保存到 PostgreSQL 数据表 crawled_ranking_books
+        """
+        if not books:
+            return 0
+
+        ddl = """
+        CREATE TABLE IF NOT EXISTS crawled_ranking_books (
+            id BIGSERIAL PRIMARY KEY,
+            book_id VARCHAR(64) NOT NULL,
+            title VARCHAR(128) NOT NULL,
+            author VARCHAR(64) NOT NULL,
+            platform VARCHAR(32) NOT NULL,
+            channel VARCHAR(16) NOT NULL,
+            rank_name VARCHAR(32) NOT NULL,
+            rank_position INT NOT NULL,
+            category VARCHAR(64) DEFAULT '',
+            intro TEXT DEFAULT '',
+            book_url TEXT DEFAULT '',
+            heat_score NUMERIC(5, 2) DEFAULT 80.00,
+            fetched_at TIMESTAMPTZ DEFAULT NOW(),
+            CONSTRAINT uq_platform_rank_pos UNIQUE (platform, rank_name, rank_position)
+        );
+        CREATE INDEX IF NOT EXISTS idx_crawled_platform ON crawled_ranking_books(platform, rank_name);
+        CREATE INDEX IF NOT EXISTS idx_crawled_title ON crawled_ranking_books(title, author);
+        """
+        sql = """
+        INSERT INTO crawled_ranking_books (
+            book_id, title, author, platform, channel,
+            rank_name, rank_position, category, intro, book_url,
+            heat_score, fetched_at
+        ) VALUES (
+            %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s,
+            %s, NOW()
+        )
+        ON CONFLICT (platform, rank_name, rank_position) DO UPDATE SET
+            book_id = EXCLUDED.book_id,
+            title = EXCLUDED.title,
+            author = EXCLUDED.author,
+            category = EXCLUDED.category,
+            intro = EXCLUDED.intro,
+            book_url = EXCLUDED.book_url,
+            heat_score = EXCLUDED.heat_score,
+            fetched_at = NOW();
+        """
+        saved = 0
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(ddl)
+                    for b in books:
+                        cur.execute(sql, (
+                            str(getattr(b, "book_id", "") or ""),
+                            getattr(b, "title", "").strip(),
+                            (getattr(b, "author", "未知") or "未知").strip(),
+                            getattr(b, "platform", ""),
+                            getattr(b, "channel", "男频"),
+                            getattr(b, "rank_name", "热读榜"),
+                            getattr(b, "rank_position", 1),
+                            getattr(b, "category", "") or "",
+                            getattr(b, "intro", "") or "",
+                            getattr(b, "book_url", "") or "",
+                            getattr(b, "heat_score", 80.0)
+                        ))
+                        saved += 1
+                conn.commit()
+            return saved
+        except Exception as e:
+            print(f"[PgNovelStorage] 批量写入抓取书籍失败: {e}")
+            return 0
+
+    def get_crawled_books_count(self) -> int:
+        """获取已抓取存储的书籍总数"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM crawled_ranking_books;")
+                    return cur.fetchone()[0]
+        except Exception:
+            return 0
+
 
 # ============================================================================
 # 5 大标杆网文基准数据 (涵盖男频与女频三大赛道)

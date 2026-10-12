@@ -21,23 +21,24 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-from novel_trends import NovelCacheManager, NovelSyncService, NovelAIAnalyzer
+from novel_trends import NovelCacheManager, NovelSyncService, NovelAIAnalyzer, PgNovelStorage
 
 
 def main():
     print("=" * 68)
     print("  短剧/漫剧大盘题材风向标同步引擎 (真实小说平台直连)")
-    print("  覆盖平台: 起点中文网 (月票榜/潜力榜/签约新书榜/未签约新书榜 TOP 50)")
-    print("            纵横中文网 (月票榜/新书榜/新书订阅榜 TOP 50)")
-    print("            晋江文学城 (月度排行榜/新晋作者榜/完结金榜 TOP 50)")
-    print("            潇湘书院   (潇湘票榜/畅销榜/完结榜/阅读榜/收藏榜 TOP 20)")
+    print("  覆盖平台: 起点中文网 (月票榜/潜力榜/签约新书榜/未签约新书榜 各 TOP 50)")
+    print("            纵横中文网 (月票榜/新书榜/新书订阅榜 各 TOP 50)")
+    print("            晋江文学城 (新晋作者榜/月度排行榜/读者栽培榜 各 TOP 50)")
+    print("            潇湘书院   (近7天阅读榜/30天畅销榜/潇湘票榜/收藏榜 各 TOP 20)")
     print("=" * 68)
 
     cache = NovelCacheManager()
     sync_service = NovelSyncService(cache)
     ai_analyzer = NovelAIAnalyzer(cache)
+    pg_storage = PgNovelStorage()
 
-    # 1. 抓取最新榜单作品 (四大主流平台各核心榜单)
+    # 1. 抓取最新榜单作品 (四大主流平台 14 大核心快节奏榜单)
     total_fetched, new_count, new_books = sync_service.sync_all_platforms(
         limit_per_platform=15,
         qidian_top_per_board=50,
@@ -46,7 +47,12 @@ def main():
         xiaoxiang_top_per_board=20
     )
 
-    # 2. 增量 AI 分析：已存在情节的书籍严格跳过，零重复消耗
+    # 2. 将抓取到的全量真实榜单数据同步存入 PostgreSQL 远程数据库
+    all_crawled_books = list(cache.kb.books.values())
+    saved_pg = pg_storage.save_crawled_books(all_crawled_books)
+    print(f"\n[PostgreSQL 实时入库] 已将 {saved_pg} 部四大平台榜单作品同步入库至远程 PostgreSQL (crawled_ranking_books)！")
+
+    # 3. 增量 AI 分析：已存在情节的书籍严格跳过，零重复消耗
     analyzed_count = ai_analyzer.analyze_books(new_books)
 
     # 3. 输出大盘风向看板

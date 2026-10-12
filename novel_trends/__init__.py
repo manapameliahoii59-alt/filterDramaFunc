@@ -9,6 +9,7 @@ from .ai_analyzer import NovelAIAnalyzer
 from .trend_matcher import TrendMatcher
 from .novel_dna_extractor import NovelDnaExtractor
 from .dna_matcher import DnaTrendMatcher
+from .pg_storage import PgNovelStorage
 
 __all__ = [
     "NovelBook",
@@ -21,6 +22,7 @@ __all__ = [
     "NovelAIAnalyzer",
     "TrendMatcher",
     "NovelDnaExtractor",
-    "DnaTrendMatcher"
+    "DnaTrendMatcher",
+    "PgNovelStorage"
 ]
 

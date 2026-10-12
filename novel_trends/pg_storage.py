@@ -103,8 +103,7 @@ class PgNovelStorage:
             -- 6. 完整 6 维结构化分析 JSONB
             dna_profile JSONB NOT NULL,
             
-            -- 7. 风险与业务状态
-            risk_level VARCHAR(32) DEFAULT '安全',
+            -- 7. 业务状态
             status VARCHAR(16) DEFAULT 'active',
             created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -192,7 +191,6 @@ class PgNovelStorage:
         COMMENT ON COLUMN novel_dna_records.l1_macro_tropes IS 'L1宏观母题标签数组（GIN倒排索引，微秒级重叠比对）';
         COMMENT ON COLUMN novel_dna_records.l2_micro_elements IS 'L2微观剧情爽点与经典道具元素数组（GIN倒排索引）';
         COMMENT ON COLUMN novel_dna_records.dna_profile IS '完整6维结构化深度基因分析JSONB（含人设断层、开局危机钩子、破局爽点杠杆）';
-        COMMENT ON COLUMN novel_dna_records.risk_level IS '广电微短剧合规风险等级（安全 / 擦边预警 / 违规高危）';
         COMMENT ON COLUMN novel_dna_records.status IS '记录业务状态（active有效参与加权 / archived冷备归档）';
         COMMENT ON COLUMN novel_dna_records.created_at IS '基因特征首次分析建档时间戳';
         COMMENT ON COLUMN novel_dna_records.updated_at IS '基因或生命周期衰减最近一次更新时间戳';
@@ -263,9 +261,6 @@ class PgNovelStorage:
         l1_tropes = tropes.get("l1_macro_tropes", [])
         l2_tropes = tropes.get("l2_micro_elements", [])
 
-        compliance = profile.get("compliance_risk", {})
-        risk_level = compliance.get("risk_level", "安全")
-
         sql = """
         INSERT INTO novel_dna_records (
             book_key, title, author,
@@ -273,14 +268,14 @@ class PgNovelStorage:
             heat_score, days_on_rank, lifecycle_stage,
             gender_track, main_category, sub_category, target_audience,
             l1_macro_tropes, l2_micro_elements,
-            dna_profile, risk_level, updated_at
+            dna_profile, updated_at
         ) VALUES (
             %s, %s, %s,
             %s, %s, %s, %s,
             %s, %s, %s,
             %s, %s, %s, %s,
             %s, %s,
-            %s, %s, NOW()
+            %s, NOW()
         )
         ON CONFLICT (book_key) DO UPDATE SET
             source_platform = EXCLUDED.source_platform,
@@ -297,7 +292,6 @@ class PgNovelStorage:
             l1_macro_tropes = EXCLUDED.l1_macro_tropes,
             l2_micro_elements = EXCLUDED.l2_micro_elements,
             dna_profile = EXCLUDED.dna_profile,
-            risk_level = EXCLUDED.risk_level,
             updated_at = NOW();
         """
         try:
@@ -309,7 +303,7 @@ class PgNovelStorage:
                         heat_score, days_on_rank, lifecycle_stage,
                         gender_track, main_category, sub_category, target_audience,
                         l1_tropes, l2_tropes,
-                        json.dumps(profile, ensure_ascii=False), risk_level
+                        json.dumps(profile, ensure_ascii=False)
                     ))
                 conn.commit()
             return True
@@ -512,10 +506,6 @@ BENCHMARK_NOVELS = [
                     "#黑龙令出", "#女友悔恨下跪", "#撕毁婚书", "#通天医术救大佬",
                     "#反派家族覆灭", "#当众打脸虐渣", "#百倍奉还", "#绝不姑息"
                 ]
-            },
-            "compliance_risk": {
-                "risk_level": "安全",
-                "risk_reason": "合规安全"
             }
         }
     },
@@ -560,10 +550,6 @@ BENCHMARK_NOVELS = [
                     "#逼签断绝关系书", "#替嫁残疾大佬", "#雨夜赶出家门", "#神医马甲掉马",
                     "#黑客马甲震惊全场", "#豪门父母下跪求原谅", "#假千金身份曝光", "#夺回母亲遗物绝不原谅"
                 ]
-            },
-            "compliance_risk": {
-                "risk_level": "安全",
-                "risk_reason": "合规安全"
             }
         }
     },
@@ -609,10 +595,6 @@ BENCHMARK_NOVELS = [
                     "#北俱芦洲偷渡名额", "#归零老人控场", "#反向驯化精神病人",
                     "#亲戚入驻豪宅扔遗像", "#全家贪婪嘴脸曝光", "#绝不原谅绝地反杀"
                 ]
-            },
-            "compliance_risk": {
-                "risk_level": "擦边预警",
-                "risk_reason": "含精神病院限制人身自由、假诊断等情节，需弱化制度对抗，强化民事夺产与正义反杀"
             }
         }
     },
@@ -657,10 +639,6 @@ BENCHMARK_NOVELS = [
                     "#抢夺血脉", "#古碑传承", "#万鬼噬身", "#点燃不灭灯火",
                     "#禁区归来", "#横推敌手", "#举世皆敌", "#全家悔恨跪求"
                 ]
-            },
-            "compliance_risk": {
-                "risk_level": "擦边预警",
-                "risk_reason": "包含永夜灭世、献祭、万鬼噬身等黑暗恐怖意象，需弱化封建迷信渲染"
             }
         }
     },
@@ -705,10 +683,6 @@ BENCHMARK_NOVELS = [
                     "#继母伪善陷害", "#灵堂反杀", "#撕毁婚书", "#掌掴庶妹",
                     "#外祖家撑腰", "#夫君病中相护", "#全家悔恨下跪", "#绝不原谅"
                 ]
-            },
-            "compliance_risk": {
-                "risk_level": "安全",
-                "risk_reason": "合规安全"
             }
         }
     }

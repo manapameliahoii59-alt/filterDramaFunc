@@ -97,10 +97,6 @@ USER_PROMPT_TEMPLATE = """请根据以下网络小说的书名与作者，推测
     "l2_micro_elements": [
       "8~12个微观情节看点标签，必须细致展现具体剧情冲突、道具、动作与名场面，如：#替嫁植物人, #雨夜罚跪, #撕毁百亿婚书, #全家悔恨下跪, #绝不原谅, #抢夺母亲遗物"
     ]
-  }},
-  "compliance_risk": {{
-    "risk_level": "安全 / 擦边预警 / 红线违规",
-    "risk_reason": "如有风控风险注明原因，合规安全则填'合规安全'"
   }}
 }}"""
 
@@ -191,7 +187,6 @@ def main():
             l2 = pj.get('hierarchical_tropes', {}).get('l2_micro_elements', [])
             print(f"    - L1 宏观标签 ({len(l1)}个): {l1}")
             print(f"    - L2 微观标签 ({len(l2)}个): {l2}")
-            print(f"    - 合规风险: {pj.get('compliance_risk', {}).get('risk_level')}")
         else:
             print("  [警告] JSON 解析失败，请查看 raw_content!")
 

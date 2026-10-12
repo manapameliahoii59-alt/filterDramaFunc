@@ -193,14 +193,6 @@ class CoarseFilterPipeline:
             if fine_res.highlights:
                 diagnostics.append(f"[潜力亮点] {' | '.join(fine_res.highlights)}")
 
-        # 风险等级
-        if len(veto_reasons) >= 2 or composite_score < 40.0:
-            risk_level = "CRITICAL"
-        elif len(veto_reasons) == 1 or composite_score < 60.0:
-            risk_level = "HIGH"
-        else:
-            risk_level = "LOW"
-
         total_cost_ms = (time.perf_counter() - start_time) * 1000.0
 
         return CoarseFilterResult(
@@ -210,7 +202,6 @@ class CoarseFilterPipeline:
             composite_score=composite_score,
             dimension_scores=dimension_scores,
             trend_evidence=trend_res,
-            risk_level=risk_level,
             veto_reasons=veto_reasons,
             diagnostics=diagnostics,
             scores=all_scores,

@@ -65,7 +65,7 @@ class CoarseFilterResult(BaseModel):
     composite_score: float = Field(default=0.0, description="多维加权综合总得分 (0-100分)")
     dimension_scores: Dict[str, float] = Field(default_factory=dict, description="各维度得分明细 (画面/规格/密度/对抗/视听)")
     trend_evidence: Optional[Dict[str, Any]] = Field(default=None, description="真实网文榜单风向标与爆款书籍同款匹配依据")
-    risk_level: str = Field(description="风险等级: LOW / MEDIUM / CRITICAL")
+    risk_level: Optional[str] = Field(default=None, description="风险等级 (已废弃)")
     veto_reasons: List[str] = Field(default_factory=list, description="命中严重失分或淘汰原因列表")
     diagnostics: List[str] = Field(default_factory=list, description="归因排查详情")
     scores: Dict[str, float] = Field(default_factory=dict, description="汇总特征指标字典")

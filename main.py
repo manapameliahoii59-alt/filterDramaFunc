@@ -202,7 +202,6 @@ def run_batch_filter(input_file_path: str, fast_fail: bool = True):
             "composite_score": res.composite_score,
             "dimension_scores": res.dimension_scores,
             "trend_evidence": res.trend_evidence,
-            "risk_level": res.risk_level,
             "veto_reasons": res.veto_reasons,
             "diagnostics": res.diagnostics,
             "cost_ms": res.total_execution_time_ms,

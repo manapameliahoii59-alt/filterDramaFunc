@@ -1,6 +1,6 @@
 """
 tests/test_xiaoxiang_crawler.py
-验证潇湘书院五大核心榜单（潇湘票榜、畅销榜、完结榜、阅读榜、收藏榜）爬取逻辑
+验证潇湘书院四大高频快节奏榜单（阅读榜、畅销榜、潇湘票榜、收藏榜）爬取逻辑（已剔除完结榜）
 """
 import pytest
 from novel_trends.crawlers.xiaoxiang_crawler import XiaoxiangCrawler
@@ -9,12 +9,12 @@ from novel_trends.crawlers.xiaoxiang_crawler import XiaoxiangCrawler
 def test_xiaoxiang_crawler_boards_configured():
     crawler = XiaoxiangCrawler()
     board_names = [name for name, idx in crawler.BOARDS]
-    assert "潇湘票榜" in board_names
-    assert "畅销榜" in board_names
-    assert "完结榜" in board_names
     assert "阅读榜" in board_names
+    assert "畅销榜" in board_names
+    assert "潇湘票榜" in board_names
     assert "收藏榜" in board_names
-    assert len(crawler.BOARDS) == 5
+    assert "完结榜" not in board_names
+    assert len(crawler.BOARDS) == 4
 
 
 def test_xiaoxiang_crawler_fetch_boards_live():

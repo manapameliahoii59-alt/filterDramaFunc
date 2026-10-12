@@ -11,6 +11,7 @@ import json
 import time
 import urllib.request
 from typing import Dict, Any, List, Optional
+from .models import NovelDnaProfile
 def _load_env_key() -> str:
     env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     if os.path.exists(env_file):

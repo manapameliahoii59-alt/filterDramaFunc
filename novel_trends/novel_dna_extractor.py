@@ -10,25 +10,40 @@ import re
 import json
 import time
 import urllib.request
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from .models import NovelDnaProfile
-def _load_env_key() -> str:
+def _load_env_config() -> Tuple[str, str, str]:
+    """读取环境配置，优先使用阿里云百炼 DashScope (Qwen3.8-Flash)，备用 DeepSeek"""
     env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    env_map = {}
     if os.path.exists(env_file):
         try:
             with open(env_file, "r", encoding="utf-8") as f:
                 for line in f:
                     if line.strip() and not line.startswith("#") and "=" in line:
                         k, v = line.strip().split("=", 1)
-                        if k.strip() == "DEEPSEEK_API_KEY":
-                            return v.strip()
+                        env_map[k.strip()] = v.strip()
         except Exception:
             pass
-    return os.environ.get("DEEPSEEK_API_KEY", "")
 
-API_KEY = _load_env_key()
-API_URL = "https://api.deepseek.com/chat/completions"
-MODEL_NAME = "deepseek-flash"
+    # 1. 优先使用 DashScope Qwen3.8-Flash
+    dashscope_key = env_map.get("DASHSCOPE_API_KEY") or os.environ.get("DASHSCOPE_API_KEY", "")
+    if dashscope_key:
+        model = env_map.get("DASHSCOPE_MODEL") or os.environ.get("DASHSCOPE_MODEL", "qwen3.8-flash")
+        url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+        return dashscope_key, url, model
+
+    # 2. 备用 DeepSeek
+    deepseek_key = env_map.get("DEEPSEEK_API_KEY") or os.environ.get("DEEPSEEK_API_KEY", "")
+    if deepseek_key:
+        return deepseek_key, "https://api.deepseek.com/chat/completions", "deepseek-flash"
+
+    return "", "", ""
+
+from typing import Tuple
+API_KEY, API_URL, MODEL_NAME = _load_env_config()
+
+import threading
 
 DNA_KB_PATH = os.path.join(os.path.dirname(__file__), "data", "novel_dna_kb.json")
 
@@ -89,6 +104,7 @@ class NovelDnaExtractor:
     def __init__(self, storage_path: str = DNA_KB_PATH):
         self.storage_path = os.path.abspath(storage_path)
         os.makedirs(os.path.dirname(self.storage_path), exist_ok=True)
+        self._lock = threading.Lock()
         self.dna_cache: Dict[str, Dict[str, Any]] = self._load_cache()
 
     def _load_cache(self) -> Dict[str, Dict[str, Any]]:
@@ -101,15 +117,16 @@ class NovelDnaExtractor:
         return {}
 
     def _save_cache(self):
-        try:
-            temp_path = self.storage_path + ".tmp"
-            with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump(self.dna_cache, f, ensure_ascii=False, indent=2)
-            if os.path.exists(self.storage_path):
-                os.remove(self.storage_path)
-            os.rename(temp_path, self.storage_path)
-        except Exception as e:
-            print(f"[NovelDnaExtractor] 保存缓存失败: {e}")
+        with self._lock:
+            try:
+                temp_path = self.storage_path + f".tmp.{os.getpid()}"
+                with open(temp_path, "w", encoding="utf-8") as f:
+                    json.dump(self.dna_cache, f, ensure_ascii=False, indent=2)
+                if os.path.exists(self.storage_path):
+                    os.remove(self.storage_path)
+                os.rename(temp_path, self.storage_path)
+            except Exception as e:
+                print(f"[NovelDnaExtractor] 保存缓存失败: {e}")
 
     def _make_key(self, title: str, author: str) -> str:
         return f"{title.strip()}_{author.strip()}"
@@ -119,17 +136,19 @@ class NovelDnaExtractor:
         获取单部小说的 DNA 特征（已存在则 0 延迟复用本地缓存）
         """
         key = self._make_key(title, author)
-        if not force_refresh and key in self.dna_cache:
-            data = self.dna_cache[key]
+        with self._lock:
+            cached_item = self.dna_cache.get(key)
+        if not force_refresh and cached_item:
             try:
-                return NovelDnaProfile.parse_obj(data) if hasattr(NovelDnaProfile, "parse_obj") else NovelDnaProfile.model_validate(data)
+                return NovelDnaProfile.parse_obj(cached_item) if hasattr(NovelDnaProfile, "parse_obj") else NovelDnaProfile.model_validate(cached_item)
             except Exception:
                 pass
 
-        # 发起 DeepSeek 调用
-        profile_data = self._call_deepseek_extract(title, author)
+        # 发起大模型 (Qwen3.8-Flash / DeepSeek) 调用
+        profile_data = self._call_llm_extract(title, author)
         if profile_data:
-            self.dna_cache[key] = profile_data
+            with self._lock:
+                self.dna_cache[key] = profile_data
             self._save_cache()
             try:
                 return NovelDnaProfile.parse_obj(profile_data) if hasattr(NovelDnaProfile, "parse_obj") else NovelDnaProfile.model_validate(profile_data)
@@ -137,8 +156,12 @@ class NovelDnaExtractor:
                 pass
         return None
 
-    def _call_deepseek_extract(self, title: str, author: str) -> Optional[Dict[str, Any]]:
-        """调用 DeepSeek 官方 API 提取 6 维特征"""
+    def _call_llm_extract(self, title: str, author: str) -> Optional[Dict[str, Any]]:
+        """调用大语言模型 (优先通义千问 Qwen3.8-Flash，备用 DeepSeek) 提取 6 维特征"""
+        if not API_KEY or not API_URL:
+            print(f"[NovelDnaExtractor] 未检测到大模型 API_KEY，跳过大模型调用")
+            return None
+
         prompt = USER_PROMPT_TEMPLATE.format(title=title, author=author)
         payload = {
             "model": MODEL_NAME,
@@ -147,33 +170,43 @@ class NovelDnaExtractor:
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.3,
-            "max_tokens": 8000,
+            "max_tokens": 1800,
             "response_format": {"type": "json_object"}
         }
+        if "dashscope" in API_URL:
+            payload["enable_thinking"] = False
         headers = {
             "Authorization": f"Bearer {API_KEY}",
             "Content-Type": "application/json"
         }
 
-        try:
-            req = urllib.request.Request(API_URL, data=json.dumps(payload).encode('utf-8'), headers=headers)
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                raw = json.loads(resp.read().decode('utf-8'))
-                choice = raw['choices'][0]
-                content = choice['message'].get('content', '')
-                clean_str = content.strip()
-                if clean_str.startswith("```json"):
-                    clean_str = clean_str[7:]
-                if clean_str.startswith("```"):
-                    clean_str = clean_str[3:]
-                if clean_str.endswith("```"):
-                    clean_str = clean_str[:-3]
-                
-                parsed = json.loads(clean_str.strip())
-                return parsed
-        except Exception as e:
-            print(f"[NovelDnaExtractor] 调用 DeepSeek 提取《{title}》异常: {e}")
-            return None
+        for attempt in range(1, 3):
+            try:
+                req = urllib.request.Request(API_URL, data=json.dumps(payload).encode('utf-8'), headers=headers)
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    raw = json.loads(resp.read().decode('utf-8'))
+                    choice = raw['choices'][0]
+                    content = choice['message'].get('content', '')
+                    clean_str = content.strip()
+                    if clean_str.startswith("```json"):
+                        clean_str = clean_str[7:]
+                    if clean_str.startswith("```"):
+                        clean_str = clean_str[3:]
+                    if clean_str.endswith("```"):
+                        clean_str = clean_str[:-3]
+                    
+                    parsed = json.loads(clean_str.strip())
+                    return parsed
+            except Exception as e:
+                if attempt == 1:
+                    time.sleep(1)
+                    continue
+                print(f"[NovelDnaExtractor] 调用大模型 ({MODEL_NAME}) 提取《{title}》异常 (第{attempt}次重试失败): {e}")
+                return None
+
+    def _call_deepseek_extract(self, title: str, author: str) -> Optional[Dict[str, Any]]:
+        """向后兼容别名"""
+        return self._call_llm_extract(title, author)
 
     def get_all_profiles(self) -> List[NovelDnaProfile]:
         """获取本地库中所有已分析小说的 DNA 列表"""

@@ -10,9 +10,10 @@ import os
 import re
 import json
 from datetime import datetime
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Any
 from .models import NovelBook, TrendingTropePattern, TrendingTropesSummary
 from .cache_manager import NovelCacheManager
+from .novel_dna_extractor import NovelDnaExtractor
 
 
 # 男频常见核心母题映射库（用于启发式模式提取）
@@ -77,8 +78,10 @@ FEMALE_TROPE_DEFINITIONS = {
 class NovelAIAnalyzer:
     """AI 题材风向标萃取器"""
 
-    def __init__(self, cache_manager: NovelCacheManager):
+    def __init__(self, cache_manager: NovelCacheManager, pg_storage: Optional[Any] = None):
         self.cache = cache_manager
+        self.pg_storage = pg_storage
+        self.extractor = NovelDnaExtractor()
 
     def analyze_books(self, books: List[NovelBook], force_reanalyze: bool = False) -> int:
         """
@@ -125,11 +128,47 @@ class NovelAIAnalyzer:
     def _extract_book_dna(self, book: NovelBook) -> Tuple[List[str], List[str], str]:
         """
         提取单本书籍的爆款 DNA（核心梗、付费关键词、叙事弧线）
+        优先调用大模型 (Qwen3.8-Flash) 深度提取，并实时入库 PostgreSQL；
+        若无网络或大模型失败，则无缝降级为内置网文启发式引擎。
         """
+        # 1. 尝试调用大模型提取 6 维结构化 DNA
+        author = getattr(book, "author", "") or "未知"
+        try:
+            profile = self.extractor.get_novel_dna(book.title, author)
+            if profile:
+                profile_dict = profile.dict() if hasattr(profile, "dict") else profile.model_dump()
+                h_tropes = profile_dict.get("hierarchical_tropes", {})
+                l1 = h_tropes.get("l1_macro_tropes", [])
+                l2 = h_tropes.get("l2_micro_elements", [])
+                idc = profile_dict.get("identity_contrast", {})
+                gap = idc.get("contrast_gap", "")
+                hook = profile_dict.get("opening_crisis_hook", {})
+                pay = profile_dict.get("payoff_mode", {})
+
+                arc = gap if gap else f"{hook.get('conflict_type', '开局受困')} -> {pay.get('core_payoff', '反杀打脸')}"
+                tropes = [t.lstrip("#") for t in l1]
+                keywords = [k.lstrip("#") for k in l2]
+
+                # 实时同步入库 PostgreSQL novel_dna_records
+                if self.pg_storage:
+                    b_type = "NEW_TREND" if any(w in (book.rank_name or "") for w in ["新", "潜力"]) else "MONTHLY_HOT"
+                    self.pg_storage.upsert_novel_dna(
+                        profile=profile_dict,
+                        source_platform=book.platform or "四大平台",
+                        rank_name=book.rank_name or "热榜",
+                        rank_position=getattr(book, "rank_position", 1) or 1,
+                        board_type=b_type,
+                        days_on_rank=3
+                    )
+
+                return tropes[:3] if tropes else ["大盘核心爆款"], keywords[:8], arc
+        except Exception as e:
+            print(f"[AI题材分析] 大模型提取《{book.title}》降级为启发式引擎: {e}")
+
+        # 2. 启发式兜底模式匹配与关键词挖掘
         content_text = f"{book.title} {book.category} {book.intro}"
         channel = book.channel
 
-        # 模式匹配与关键词挖掘
         matched_tropes: List[str] = []
         matched_keywords: List[str] = []
         patterns = FEMALE_TROPE_DEFINITIONS if channel == "女频" else MALE_TROPE_DEFINITIONS

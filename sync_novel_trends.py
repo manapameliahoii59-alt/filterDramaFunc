@@ -35,8 +35,8 @@ def main():
 
     cache = NovelCacheManager()
     sync_service = NovelSyncService(cache)
-    ai_analyzer = NovelAIAnalyzer(cache)
     pg_storage = PgNovelStorage()
+    ai_analyzer = NovelAIAnalyzer(cache, pg_storage=pg_storage)
 
     # 1. 抓取最新榜单作品 (四大主流平台 14 大核心快节奏榜单)
     total_fetched, new_count, new_books = sync_service.sync_all_platforms(

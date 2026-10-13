@@ -47,25 +47,49 @@ def sync_existing_cache_to_pg(storage: PgNovelStorage, extractor: NovelDnaExtrac
     return synced
 
 
-def get_pending_books(storage: PgNovelStorage, top_n_per_board: int = 5) -> List[Dict[str, Any]]:
+def get_pending_books(
+    storage: PgNovelStorage,
+    top_n_per_board: int = 5,
+    fetch_all: bool = False,
+    limit: int = 0
+) -> List[Dict[str, Any]]:
     """
     从 PostgreSQL crawled_ranking_books 获取待分析入库的书籍：
-    每个榜单优先提取 TOP N 部作品，且排除 novel_dna_records 中已存在的作品
+    每个榜单优先提取 TOP N 部作品，或全量提取，且排除 novel_dna_records 中已存在的作品
     """
-    sql = f"""
-    WITH ranked_books AS (
-        SELECT 
-            c.title, c.author, c.platform, c.rank_name, c.rank_position, c.channel,
-            ROW_NUMBER() OVER (PARTITION BY c.platform, c.rank_name ORDER BY c.rank_position ASC) as rn
+    if fetch_all:
+        sql = """
+        SELECT DISTINCT ON (c.title, c.author) 
+            c.title, c.author, c.platform, c.rank_name, c.rank_position, c.channel
         FROM crawled_ranking_books c
-        WHERE c.author != '未知' AND c.author != ''
-    )
-    SELECT r.title, r.author, r.platform, r.rank_name, r.rank_position, r.channel
-    FROM ranked_books r
-    LEFT JOIN novel_dna_records d ON d.book_key = (r.title || '_' || r.author)
-    WHERE r.rn <= {top_n_per_board} AND d.id IS NULL
-    ORDER BY r.platform, r.rank_name, r.rank_position;
-    """
+        LEFT JOIN novel_dna_records d ON d.book_key = (c.title || '_' || c.author)
+        WHERE c.author != '未知' AND c.author != '' AND d.id IS NULL
+        ORDER BY c.title, c.author, c.rank_position ASC
+        """
+        if limit > 0:
+            sql += f" LIMIT {limit};"
+        else:
+            sql += ";"
+    else:
+        sql = f"""
+        WITH ranked_books AS (
+            SELECT 
+                c.title, c.author, c.platform, c.rank_name, c.rank_position, c.channel,
+                ROW_NUMBER() OVER (PARTITION BY c.platform, c.rank_name ORDER BY c.rank_position ASC) as rn
+            FROM crawled_ranking_books c
+            WHERE c.author != '未知' AND c.author != ''
+        )
+        SELECT r.title, r.author, r.platform, r.rank_name, r.rank_position, r.channel
+        FROM ranked_books r
+        LEFT JOIN novel_dna_records d ON d.book_key = (r.title || '_' || r.author)
+        WHERE r.rn <= {top_n_per_board} AND d.id IS NULL
+        ORDER BY r.platform, r.rank_name, r.rank_position
+        """
+        if limit > 0:
+            sql += f" LIMIT {limit};"
+        else:
+            sql += ";"
+
     pending = []
     with storage.get_connection() as conn:
         with conn.cursor() as cur:
@@ -120,9 +144,18 @@ def process_single_book(book: Dict[str, Any], extractor: NovelDnaExtractor, stor
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Qwen3.8-Flash 网文 DNA 批量提取与 PostgreSQL 实时入库引擎")
+    parser.add_argument("--top-n", type=int, default=3, help="各榜单提取前 N 名头部书籍 (默认 3)")
+    parser.add_argument("--all", action="store_true", help="全量处理所有尚未分析的榜单书籍 (忽略 top-n)")
+    parser.add_argument("--limit", type=int, default=0, help="限制本次最大提取总数 (0 为不限制)")
+    parser.add_argument("--workers", type=int, default=3, help="并发处理线程数 (默认 3)")
+    args = parser.parse_args()
+
     print("=" * 72)
     print("  Qwen3.8-Flash 大盘网文 DNA 批量提取与 PostgreSQL 实时入库引擎")
     print(f"  AI 驱动模型: {MODEL_NAME}")
+    print(f"  提取模式: {'全量剩余作品' if args.all else f'各榜单 TOP {args.top_n}'} | 并发线程: {args.workers}")
     print("=" * 72)
 
     storage = PgNovelStorage()
@@ -133,12 +166,17 @@ def main():
 
     # 2. 将之前测试已提取的缓存记录同步入库
     cached_synced = sync_existing_cache_to_pg(storage, extractor)
-    print(f"\n[本地缓存对齐] 成功将本地 {cached_synced} 部已有基因数据同步入库 PostgreSQL (novel_dna_records)！")
+    if cached_synced > 0:
+        print(f"\n[本地缓存对齐] 成功将本地 {cached_synced} 部已有基因数据同步入库 PostgreSQL (novel_dna_records)！")
 
     # 3. 查询待入库的核心榜单作品
-    # 策略：每个榜单优先入库 TOP 3 头部标杆（14个榜单共约 40 部经典）
-    pending = get_pending_books(storage, top_n_per_board=3)
-    print(f"\n[待分析队列] 从 14 大榜单中筛选出 {len(pending)} 部头部排位新书待执行 AI 基因提取...")
+    pending = get_pending_books(
+        storage,
+        top_n_per_board=args.top_n,
+        fetch_all=args.all,
+        limit=args.limit
+    )
+    print(f"\n[待分析队列] 筛选出 {len(pending)} 部待提取书籍执行 AI 基因提取...")
 
     if not pending:
         print("[提示] 所有目标榜单头部作品已全部入库！")
@@ -146,13 +184,13 @@ def main():
         print(f"PostgreSQL novel_dna_records 当前总计: {count} 部作品。")
         return
 
-    # 4. 多线程并发调度提取与入库 (限制 3 线程以兼顾速度与稳定性)
+    # 4. 多线程并发调度提取与入库
     success_count = 0
     fail_count = 0
     start_time = time.time()
 
     print(f"\n[启动流水线] 正在通过 Qwen3.8-Flash 进行批量提取并实时写入 PostgreSQL...")
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=args.workers) as pool:
         future_map = {
             pool.submit(process_single_book, b, extractor, storage): b
             for b in pending

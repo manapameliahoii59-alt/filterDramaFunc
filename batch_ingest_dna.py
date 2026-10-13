@@ -124,7 +124,7 @@ def process_single_book(book: Dict[str, Any], extractor: NovelDnaExtractor, stor
         print(f"  ❌ 《{title}》（{author}）AI 提取失败，耗时 {cost:.2f}s")
         return False
 
-    prof_dict = profile.dict() if hasattr(profile, "dict") else profile.model_dump()
+    prof_dict = profile if isinstance(profile, dict) else (profile.model_dump() if hasattr(profile, "model_dump") else profile.dict())
     success = storage.upsert_novel_dna(
         profile=prof_dict,
         source_platform=platform,
@@ -195,15 +195,18 @@ def main():
             pool.submit(process_single_book, b, extractor, storage): b
             for b in pending
         }
-        for future in as_completed(future_map):
+        for idx, future in enumerate(as_completed(future_map), 1):
+            b = future_map[future]
             try:
                 ok = future.result()
                 if ok:
                     success_count += 1
                 else:
                     fail_count += 1
+                if idx % 10 == 0 or idx == len(pending):
+                    pct = idx * 100 // len(pending)
+                    print(f"--> [全量进度] 已处理 {idx}/{len(pending)} 部 ({pct}%) | 成功: {success_count} | 失败: {fail_count}")
             except Exception as e:
-                b = future_map[future]
                 print(f"  ❌ 处理《{b['title']}》发生异常: {e}")
                 fail_count += 1
 

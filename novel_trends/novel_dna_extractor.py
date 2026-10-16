@@ -9,7 +9,7 @@ import os
 import re
 import json
 import time
-import urllib.request
+import requests
 from typing import Dict, Any, List, Optional, Tuple
 from .models import NovelDnaProfile
 def _load_env_config() -> Tuple[str, str, str]:
@@ -176,26 +176,39 @@ class NovelDnaExtractor:
             "Content-Type": "application/json"
         }
 
-        for attempt in range(1, 3):
+        session = getattr(self, "_session", None)
+        if session is None:
+            self._session = requests.Session()
+            session = self._session
+
+        for attempt in range(1, 4):
             try:
-                req = urllib.request.Request(API_URL, data=json.dumps(payload).encode('utf-8'), headers=headers)
-                with urllib.request.urlopen(req, timeout=60) as resp:
-                    raw = json.loads(resp.read().decode('utf-8'))
-                    choice = raw['choices'][0]
-                    content = choice['message'].get('content', '')
-                    clean_str = content.strip()
-                    if clean_str.startswith("```json"):
-                        clean_str = clean_str[7:]
-                    if clean_str.startswith("```"):
-                        clean_str = clean_str[3:]
-                    if clean_str.endswith("```"):
-                        clean_str = clean_str[:-3]
-                    
-                    parsed = json.loads(clean_str.strip())
-                    return parsed
+                # 若此前重试过且目标为阿里云百炼，自动尝试直连 bypass 代理
+                proxies = {'http': None, 'https': None} if (attempt > 1 and "dashscope" in API_URL) else None
+                resp = session.post(
+                    API_URL,
+                    json=payload,
+                    headers=headers,
+                    timeout=45,
+                    proxies=proxies
+                )
+                resp.raise_for_status()
+                raw = resp.json()
+                choice = raw['choices'][0]
+                content = choice['message'].get('content', '')
+                clean_str = content.strip()
+                if clean_str.startswith("```json"):
+                    clean_str = clean_str[7:]
+                if clean_str.startswith("```"):
+                    clean_str = clean_str[3:]
+                if clean_str.endswith("```"):
+                    clean_str = clean_str[:-3]
+                
+                parsed = json.loads(clean_str.strip())
+                return parsed
             except Exception as e:
-                if attempt == 1:
-                    time.sleep(1)
+                if attempt < 3:
+                    time.sleep(1.5)
                     continue
                 print(f"[NovelDnaExtractor] 调用大模型 ({MODEL_NAME}) 提取《{title}》异常 (第{attempt}次重试失败): {e}")
                 return None

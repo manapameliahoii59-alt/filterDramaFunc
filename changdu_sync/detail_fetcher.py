@@ -397,3 +397,188 @@ class ChangduDetailFetcher:
                     time.sleep(2.0 + random.uniform(0.5, 1.5))
 
         return None
+
+    def capture_ep1_browser_media(
+        self,
+        book_id: str,
+        dest_dir: Optional[Path | str] = None,
+        duration_sec: float = 6.0,
+    ) -> Dict[str, Any]:
+        """
+        方案 B：在 Playwright 真实浏览器上下文中渲染已解密的第 1 集视频，
+        并通过 MediaRecorder 静默捕获原始解密音频，通过 Canvas 提取真实高画质帧。
+        彻底解决火山引擎 CDN 原生 MP4 混淆加密导致的解码破损问题。
+        """
+        save_dir = Path(dest_dir or (Path(__file__).parent.parent / "scratch" / "previews")).resolve()
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        # 确保短剧 appType=21 生效 (必须使用常读短剧分销商 ID 1855566184172552 与 appId 70022244)
+        app = getattr(self.client, "app_info", {}) or {}
+        dist_id = app.get("distributor_id") or 1855566184172552
+        app_id = app.get("app_id") or 70022244
+        app_type = app.get("app_type") or 21
+
+        set_app_js = f"""() => {{
+            const info = JSON.stringify({{appType: {app_type}, appId: {app_id}, distributorId: {dist_id}, appName: '短剧', distributorName: '短剧'}});
+            sessionStorage.setItem('AppInfo', info);
+            sessionStorage.setItem('AppInfo_Promotion', info);
+        }}"""
+        try:
+            self.page.evaluate(set_app_js)
+        except Exception:
+            pass
+
+        url = f"{HOME_ORIGIN}/sale/short-play/list/detail?id={book_id}&contentGenre=2"
+        print(f"  🌐 [浏览器渲染通道] 正在打开第1集播放页: {url}")
+
+        try:
+            self.page.goto(url, timeout=60000, wait_until="networkidle")
+        except Exception:
+            try:
+                self.page.goto(url, timeout=30000)
+            except Exception as e:
+                print(f"  ⚠ 导航详情页超时: {e}")
+
+        time.sleep(2)
+
+        # 关掉全局通知弹窗
+        try:
+            self.page.get_by_text("我知道了").click(timeout=3000)
+        except Exception:
+            pass
+        try:
+            self.page.evaluate("document.querySelectorAll('.arco-modal-wrapper, .arco-modal-mask').forEach(e => e.remove());")
+        except Exception:
+            pass
+
+        # 检查并等待 video 出现
+        try:
+            self.page.wait_for_selector("video", timeout=15000)
+        except Exception:
+            print(f"  ⚠ 页面未检测到视频组件（可能剧目尚未排期或暂无第1集播放权）")
+            return {
+                "success": False,
+                "audio_path": None,
+                "frame_path": None,
+                "frames_np": [],
+                "error": "未检测到播放器视频组件"
+            }
+
+        # 二次清除可能延迟弹出的模态框
+        try:
+            self.page.evaluate("document.querySelectorAll('.arco-modal-wrapper, .arco-modal-mask').forEach(e => e.remove());")
+        except Exception:
+            pass
+
+        # 页面内执行原生解密音频录制与多时间戳画面提取
+        capture_result = self.page.evaluate("""async (durationSec) => {
+            const v = document.querySelector('video');
+            if (!v) {
+                return { hasAudio: false, audioDataUrl: null, framesB64: [] };
+            }
+
+            v.muted = false;
+            v.volume = 1.0;
+
+            const stream = v.captureStream ? v.captureStream() : (v.mozCaptureStream ? v.mozCaptureStream() : null);
+            if (!stream) return { error: 'captureStream not supported' };
+
+            const audioTracks = stream.getAudioTracks();
+            const hasAudio = audioTracks.length > 0;
+
+            let audioDataUrl = null;
+            let mr = null;
+            let chunks = [];
+            let recordPromise = null;
+
+            if (hasAudio) {
+                const audioStream = new MediaStream([audioTracks[0]]);
+                mr = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
+                mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+                recordPromise = new Promise(resolve => {
+                    mr.onstop = () => {
+                        const blob = new Blob(chunks, { type: 'audio/webm' });
+                        const r = new FileReader();
+                        r.onloadend = () => resolve(r.result);
+                        r.readAsDataURL(blob);
+                    };
+                });
+                mr.start();
+            }
+
+            v.currentTime = 0;
+            await v.play().catch(e => console.error(e));
+            v.playbackRate = 2.0;
+
+            // 抽样画面帧（6帧覆盖全过程）
+            const framesB64 = [];
+            const canvas = document.createElement('canvas');
+            canvas.width = v.videoWidth || 540;
+            canvas.height = v.videoHeight || 960;
+            const ctx = canvas.getContext('2d');
+
+            const waitTimeMs = Math.max(4000, durationSec * 1000 / 2.0);
+            const checkPoints = 6;
+            const stepMs = waitTimeMs / checkPoints;
+
+            for (let i = 0; i < checkPoints; i++) {
+                await new Promise(r => setTimeout(r, stepMs));
+                ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                framesB64.push(canvas.toDataURL('image/jpeg', 0.85));
+            }
+
+            if (mr && mr.state !== 'inactive') {
+                mr.stop();
+            }
+            v.pause();
+
+            if (recordPromise) {
+                audioDataUrl = await recordPromise;
+            }
+
+            return {
+                hasAudio: hasAudio,
+                audioDataUrl: audioDataUrl,
+                framesB64: framesB64,
+                duration: v.duration,
+                width: v.videoWidth,
+                height: v.videoHeight
+            };
+        }""", duration_sec)
+
+        audio_path = None
+        frame_path = None
+        frames_np = []
+
+        import base64
+        import cv2
+        import numpy as np
+
+        if capture_result.get("audioDataUrl"):
+            raw_b64 = capture_result["audioDataUrl"].split(",", 1)[1]
+            a_file = save_dir / f"{book_id}_ep1_audio.webm"
+            a_file.write_bytes(base64.b64decode(raw_b64))
+            audio_path = a_file
+
+        frames_b64_list = capture_result.get("framesB64") or []
+        for idx, fb64 in enumerate(frames_b64_list):
+            raw_img_bytes = base64.b64decode(fb64.split(",", 1)[1])
+            if idx == 0:
+                f_file = save_dir / f"{book_id}_ep1_frame.jpg"
+                f_file.write_bytes(raw_img_bytes)
+                frame_path = f_file
+
+            nparr = np.frombuffer(raw_img_bytes, np.uint8)
+            img_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img_np is not None:
+                frames_np.append(img_np)
+
+        return {
+            "success": True,
+            "audio_path": audio_path,
+            "frame_path": frame_path,
+            "frames_np": frames_np,
+            "duration": capture_result.get("duration", 0),
+            "width": capture_result.get("width", 0),
+            "height": capture_result.get("height", 0),
+        }

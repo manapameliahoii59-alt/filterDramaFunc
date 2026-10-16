@@ -157,8 +157,7 @@ class NovelAIAnalyzer:
                         source_platform=book.platform or "四大平台",
                         rank_name=book.rank_name or "热榜",
                         rank_position=getattr(book, "rank_position", 1) or 1,
-                        board_type=b_type,
-                        days_on_rank=3
+                        board_type=b_type
                     )
 
                 return tropes[:3] if tropes else ["大盘核心爆款"], keywords[:8], arc

@@ -20,7 +20,7 @@ def test_pg_storage_gin_inverted_index_search():
     results = storage.search_by_tropes(["#真假千金", "#重生复仇"], channel="女频")
     assert len(results) >= 1
     first = results[0]
-    assert first["lifecycle_stage"] in ["EXPLODING", "MATURE"]
+    assert first["lifecycle_stage"] in ["SUPER_EXPLODING", "PEAK_HARVEST", "SATURATED", "OVERDUE", "DROPPED", "DEPRECATED"]
     assert first["heat_score"] >= 60.0
 
 

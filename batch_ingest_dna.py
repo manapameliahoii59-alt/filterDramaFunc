@@ -39,8 +39,7 @@ def sync_existing_cache_to_pg(storage: PgNovelStorage, extractor: NovelDnaExtrac
             source_platform="大盘精选",
             rank_name="月票榜",
             rank_position=1,
-            board_type="MONTHLY_HOT",
-            days_on_rank=3
+            board_type="MONTHLY_HOT"
         )
         if ok:
             synced += 1
@@ -130,8 +129,7 @@ def process_single_book(book: Dict[str, Any], extractor: NovelDnaExtractor, stor
         source_platform=platform,
         rank_name=rank_name,
         rank_position=rank_pos,
-        board_type=b_type,
-        days_on_rank=3
+        board_type=b_type
     )
     if success:
         sub = prof_dict.get("track_and_audience", {}).get("sub_category", "")

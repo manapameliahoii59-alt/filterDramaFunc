@@ -130,6 +130,7 @@ STEALTH_INIT_SCRIPT = """
 LAUNCH_ARGS = [
     "--disable-blink-features=AutomationControlled",
     "--disable-dev-shm-usage",
+    "--autoplay-policy=no-user-gesture-required",
 ]
 
 

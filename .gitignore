@@ -13,6 +13,8 @@ auth.json
 *.har
 *dump*.json
 scratch/
+*.db
+auth_pool/
 
 # OS files
 Thumbs.db

@@ -63,7 +63,7 @@ class CoarseFilterResult(BaseModel):
     action: str = Field(description="决策动作: PASS (通过) / VETO (低分未达标淘汰)")
     grade: str = Field(default="C", description="最终综合评级: S (>=80分) / A (65-79分) / B (60-64分) / C (淘汰)")
     composite_score: float = Field(default=0.0, description="多维加权综合总得分 (0-100分)")
-    dimension_scores: Dict[str, float] = Field(default_factory=dict, description="各维度得分明细 (画面/规格/密度/对抗/视听)")
+    dimension_scores: Dict[str, Any] = Field(default_factory=dict, description="各维度得分明细 (张力/密度/赛道/标签)")
     trend_evidence: Optional[Dict[str, Any]] = Field(default=None, description="真实网文榜单风向标与爆款书籍同款匹配依据")
     risk_level: Optional[str] = Field(default=None, description="风险等级 (已废弃)")
     veto_reasons: List[str] = Field(default_factory=list, description="命中严重失分或淘汰原因列表")
@@ -72,3 +72,11 @@ class CoarseFilterResult(BaseModel):
     fine_screening: Optional[FineScreeningScore] = Field(default=None, description="精筛打分与分级详情")
     detector_details: List[DetectorResult] = Field(default_factory=list, description="各算子明细")
     total_execution_time_ms: float = Field(default=0.0, description="总耗时（毫秒）")
+
+
+class DramaCandidate(BaseModel):
+    title: str
+    abstract: Optional[str] = None
+    total_episode_count: Optional[int] = None
+    video_path: Optional[str] = None
+

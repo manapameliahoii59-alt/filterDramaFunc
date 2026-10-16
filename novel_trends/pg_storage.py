@@ -88,7 +88,7 @@ class PgNovelStorage:
             last_ranked_at DATE DEFAULT CURRENT_DATE,               -- 最近一次在榜日期
             days_on_rank INT DEFAULT 1,                             -- 累计在榜天数
             is_currently_on_rank BOOLEAN DEFAULT TRUE,              -- 当前是否在榜
-            lifecycle_stage VARCHAR(16) DEFAULT 'EXPLODING',        -- EXPLODING (0~10天) / MATURE (11~30天) / SATURATED (31~60天) / DEPRECATED (>60天)
+            lifecycle_stage VARCHAR(16) DEFAULT 'SUPER_EXPLODING',        -- EXPLODING (0~10天) / MATURE (11~30天) / SATURATED (31~60天) / DEPRECATED (>60天)
 
             -- 4. 赛道与受众标量 (B-Tree 索引)
             gender_track VARCHAR(16) NOT NULL,                      -- 男频 / 女频
@@ -137,6 +137,11 @@ class PgNovelStorage:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(create_table_sql)
+                    cur.execute("""
+                        ALTER TABLE crawled_ranking_books ADD COLUMN IF NOT EXISTS first_crawled_at TIMESTAMPTZ DEFAULT NOW();
+                        ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS first_ranked_at DATE DEFAULT CURRENT_DATE;
+                        ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS last_ranked_at DATE DEFAULT CURRENT_DATE;
+                    """)
                 conn.commit()
             print("[PgNovelStorage] PostgreSQL 表结构与 GIN 倒排索引初始化成功！")
             # 自动注入全量字段与表结构中文备注
@@ -166,6 +171,7 @@ class PgNovelStorage:
         COMMENT ON COLUMN crawled_ranking_books.intro IS '官方文案简介/核心人设与剧情梗概';
         COMMENT ON COLUMN crawled_ranking_books.book_url IS '作品在原生平台的落地页官方URL';
         COMMENT ON COLUMN crawled_ranking_books.heat_score IS '基于位次与榜单权重映射的大盘基础热度赋分（60.00~100.00）';
+        COMMENT ON COLUMN crawled_ranking_books.first_crawled_at IS '作品在该榜位首次抓取入库时间';
         COMMENT ON COLUMN crawled_ranking_books.fetched_at IS '爬虫抓取落盘或Upsert更新时间戳';
 
         -- 表 2: novel_dna_records (大盘网文 DNA 深度特征基因库表)
@@ -183,7 +189,7 @@ class PgNovelStorage:
         COMMENT ON COLUMN novel_dna_records.last_ranked_at IS '最近一次探测在榜日期';
         COMMENT ON COLUMN novel_dna_records.days_on_rank IS '累计在榜天数（生命周期衰减核心输入变量）';
         COMMENT ON COLUMN novel_dna_records.is_currently_on_rank IS '当前是否在榜活跃（TRUE活跃 / FALSE跌出榜单）';
-        COMMENT ON COLUMN novel_dna_records.lifecycle_stage IS '时效生命周期阶段（方案B：EXPLODING爆发期0-10天 / MATURE成熟期11-30天 / SATURATED饱和期31-60天 / DEPRECATED过气淘汰>60天）';
+        COMMENT ON COLUMN novel_dna_records.lifecycle_stage IS '极速AI短剧时效生命周期阶段（SUPER_EXPLODING极速爆发1-3天[1.25x] / PEAK_HARVEST黄金收割4-7天[1.15x] / SATURATED饱和内卷8-20天[0.80x] / OVERDUE超期长尾>20天[0.60x] / DROPPED跌出榜单[0.35x]）';
         COMMENT ON COLUMN novel_dna_records.gender_track IS '性别受众赛道（男频 / 女频，初筛第一道粗滤红线）';
         COMMENT ON COLUMN novel_dna_records.main_category IS '主题材分类（都市 / 现言 / 古言 / 玄幻 / 科幻 / 悬疑）';
         COMMENT ON COLUMN novel_dna_records.sub_category IS '细分赛道切角（真假千金断亲 / 战神出狱清算 / 词条修仙带飞全族 / 读心发疯吃瓜等）';
@@ -207,30 +213,34 @@ class PgNovelStorage:
             return False
 
     @staticmethod
-    def calculate_heat_score(rank_position: int, days_on_rank: int = 1) -> Tuple[float, str]:
+    def calculate_heat_score(rank_position: int, days_on_rank: int = 1, is_currently_on_rank: bool = True) -> Tuple[float, str]:
         """
-        根据榜单名次与在榜天数，按【方案 B】计算最终大盘热度与生命周期阶段
-        - 0 ~ 10 天: 爆发期 (EXPLODING)，超频加权 1.10x
-        - 11 ~ 30 天: 成熟期 (MATURE)，基准 1.00x
-        - 31 ~ 60 天: 饱和疲劳期 (SATURATED)，衰减 0.75x
-        - > 60 天: 过气淘汰期 (DEPRECATED)，衰减 0.40x
+        根据榜单名次、在榜天数与在榜状态，按【极速 AI 短剧/漫剧时效模型】计算大盘热度与生命周期阶段：
+        - 跌出榜单 (not on rank): 跌榜淘汰期 (DROPPED)，深度衰减 0.35x
+        - 1 ~ 3 天: 极速爆发期 (SUPER_EXPLODING)，首发红利加权 1.25x
+        - 4 ~ 7 天: 黄金收割期 (PEAK_HARVEST)，顶峰跑量加权 1.15x
+        - 8 ~ 20 天: 饱和内卷期 (SATURATED)，同质化疲劳衰减 0.80x
+        - > 20 天: 超期过气期 (OVERDUE)，长尾疲劳衰减 0.60x
         """
         pos = max(1, rank_position)
         # 基础名次分: 100 - 15 * log10(pos)
         base_score = max(60.0, 100.0 - 15.0 * math.log10(pos))
 
-        if days_on_rank <= 10:
-            stage = "EXPLODING"
-            decay_factor = 1.10
-        elif days_on_rank <= 30:
-            stage = "MATURE"
-            decay_factor = 1.00
-        elif days_on_rank <= 60:
+        if not is_currently_on_rank:
+            stage = "DROPPED"
+            decay_factor = 0.35
+        elif days_on_rank <= 3:
+            stage = "SUPER_EXPLODING"
+            decay_factor = 1.25
+        elif days_on_rank <= 7:
+            stage = "PEAK_HARVEST"
+            decay_factor = 1.15
+        elif days_on_rank <= 20:
             stage = "SATURATED"
-            decay_factor = 0.75
+            decay_factor = 0.80
         else:
-            stage = "DEPRECATED"
-            decay_factor = 0.40
+            stage = "OVERDUE"
+            decay_factor = 0.60
 
         final_score = min(100.0, round(base_score * decay_factor, 2))
         return final_score, stage
@@ -242,14 +252,16 @@ class PgNovelStorage:
         rank_name: str = "热读榜",
         rank_position: int = 1,
         board_type: str = "NEW_TREND",
-        days_on_rank: int = 3
+        days_on_rank: Optional[int] = None,
+        force_days: bool = False
     ) -> bool:
-        """写入或更新单部小说的 DNA 记录 (幂等 Upsert)"""
+        """写入或更新单部小说的 DNA 记录 (幂等 Upsert，支持在榜天数智能跨天累加)"""
         title = profile.get("title", "").strip()
         author = profile.get("author", "").strip()
         book_key = f"{title}_{author}"
 
-        heat_score, lifecycle_stage = self.calculate_heat_score(rank_position, days_on_rank)
+        initial_days = days_on_rank if (days_on_rank is not None and days_on_rank > 0) else 1
+        heat_score, lifecycle_stage = self.calculate_heat_score(rank_position, initial_days)
 
         track_info = profile.get("track_and_audience", {})
         gender_track = track_info.get("gender_track", "男频")
@@ -261,46 +273,106 @@ class PgNovelStorage:
         l1_tropes = tropes.get("l1_macro_tropes", [])
         l2_tropes = tropes.get("l2_micro_elements", [])
 
-        sql = """
-        INSERT INTO novel_dna_records (
-            book_key, title, author,
-            source_platform, rank_name, rank_position, board_type,
-            heat_score, days_on_rank, lifecycle_stage,
-            gender_track, main_category, sub_category, target_audience,
-            l1_macro_tropes, l2_micro_elements,
-            dna_profile, updated_at
-        ) VALUES (
-            %s, %s, %s,
-            %s, %s, %s, %s,
-            %s, %s, %s,
-            %s, %s, %s, %s,
-            %s, %s,
-            %s, NOW()
-        )
-        ON CONFLICT (book_key) DO UPDATE SET
-            source_platform = EXCLUDED.source_platform,
-            rank_name = EXCLUDED.rank_name,
-            rank_position = EXCLUDED.rank_position,
-            board_type = EXCLUDED.board_type,
-            heat_score = EXCLUDED.heat_score,
-            days_on_rank = EXCLUDED.days_on_rank,
-            lifecycle_stage = EXCLUDED.lifecycle_stage,
-            gender_track = EXCLUDED.gender_track,
-            main_category = EXCLUDED.main_category,
-            sub_category = EXCLUDED.sub_category,
-            target_audience = EXCLUDED.target_audience,
-            l1_macro_tropes = EXCLUDED.l1_macro_tropes,
-            l2_micro_elements = EXCLUDED.l2_micro_elements,
-            dna_profile = EXCLUDED.dna_profile,
-            updated_at = NOW();
-        """
+        if force_days:
+            sql = """
+            INSERT INTO novel_dna_records (
+                book_key, title, author,
+                source_platform, rank_name, rank_position, board_type,
+                heat_score, days_on_rank, lifecycle_stage,
+                first_ranked_at, last_ranked_at, is_currently_on_rank,
+                gender_track, main_category, sub_category, target_audience,
+                l1_macro_tropes, l2_micro_elements,
+                dna_profile, updated_at
+            ) VALUES (
+                %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s,
+                CURRENT_DATE, CURRENT_DATE, TRUE,
+                %s, %s, %s, %s,
+                %s, %s,
+                %s, NOW()
+            )
+            ON CONFLICT (book_key) DO UPDATE SET
+                source_platform = EXCLUDED.source_platform,
+                rank_name = EXCLUDED.rank_name,
+                rank_position = EXCLUDED.rank_position,
+                board_type = EXCLUDED.board_type,
+                heat_score = EXCLUDED.heat_score,
+                days_on_rank = EXCLUDED.days_on_rank,
+                lifecycle_stage = EXCLUDED.lifecycle_stage,
+                last_ranked_at = CURRENT_DATE,
+                is_currently_on_rank = TRUE,
+                gender_track = EXCLUDED.gender_track,
+                main_category = EXCLUDED.main_category,
+                sub_category = EXCLUDED.sub_category,
+                target_audience = EXCLUDED.target_audience,
+                l1_macro_tropes = EXCLUDED.l1_macro_tropes,
+                l2_micro_elements = EXCLUDED.l2_micro_elements,
+                dna_profile = EXCLUDED.dna_profile,
+                updated_at = NOW();
+            """
+        else:
+            sql = """
+            INSERT INTO novel_dna_records (
+                book_key, title, author,
+                source_platform, rank_name, rank_position, board_type,
+                heat_score, days_on_rank, lifecycle_stage,
+                first_ranked_at, last_ranked_at, is_currently_on_rank,
+                gender_track, main_category, sub_category, target_audience,
+                l1_macro_tropes, l2_micro_elements,
+                dna_profile, updated_at
+            ) VALUES (
+                %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s,
+                CURRENT_DATE, CURRENT_DATE, TRUE,
+                %s, %s, %s, %s,
+                %s, %s,
+                %s, NOW()
+            )
+            ON CONFLICT (book_key) DO UPDATE SET
+                source_platform = EXCLUDED.source_platform,
+                rank_name = EXCLUDED.rank_name,
+                rank_position = EXCLUDED.rank_position,
+                board_type = EXCLUDED.board_type,
+                days_on_rank = CASE 
+                    WHEN novel_dna_records.last_ranked_at < CURRENT_DATE 
+                    THEN novel_dna_records.days_on_rank + (CURRENT_DATE - novel_dna_records.last_ranked_at)
+                    ELSE novel_dna_records.days_on_rank 
+                END,
+                last_ranked_at = CURRENT_DATE,
+                is_currently_on_rank = TRUE,
+                lifecycle_stage = CASE 
+                    WHEN (CASE WHEN novel_dna_records.last_ranked_at < CURRENT_DATE THEN novel_dna_records.days_on_rank + (CURRENT_DATE - novel_dna_records.last_ranked_at) ELSE novel_dna_records.days_on_rank END) <= 3 THEN 'SUPER_EXPLODING'
+                    WHEN (CASE WHEN novel_dna_records.last_ranked_at < CURRENT_DATE THEN novel_dna_records.days_on_rank + (CURRENT_DATE - novel_dna_records.last_ranked_at) ELSE novel_dna_records.days_on_rank END) <= 7 THEN 'PEAK_HARVEST'
+                    WHEN (CASE WHEN novel_dna_records.last_ranked_at < CURRENT_DATE THEN novel_dna_records.days_on_rank + (CURRENT_DATE - novel_dna_records.last_ranked_at) ELSE novel_dna_records.days_on_rank END) <= 20 THEN 'SATURATED'
+                    ELSE 'OVERDUE'
+                END,
+                heat_score = LEAST(100.0, ROUND((
+                    GREATEST(60.0, 100.0 - 15.0 * LOG(GREATEST(1, EXCLUDED.rank_position))) *
+                    CASE 
+                        WHEN (CASE WHEN novel_dna_records.last_ranked_at < CURRENT_DATE THEN novel_dna_records.days_on_rank + (CURRENT_DATE - novel_dna_records.last_ranked_at) ELSE novel_dna_records.days_on_rank END) <= 3 THEN 1.25
+                        WHEN (CASE WHEN novel_dna_records.last_ranked_at < CURRENT_DATE THEN novel_dna_records.days_on_rank + (CURRENT_DATE - novel_dna_records.last_ranked_at) ELSE novel_dna_records.days_on_rank END) <= 7 THEN 1.15
+                        WHEN (CASE WHEN novel_dna_records.last_ranked_at < CURRENT_DATE THEN novel_dna_records.days_on_rank + (CURRENT_DATE - novel_dna_records.last_ranked_at) ELSE novel_dna_records.days_on_rank END) <= 20 THEN 0.80
+                        ELSE 0.60
+                    END
+                )::numeric, 2)),
+                gender_track = EXCLUDED.gender_track,
+                main_category = EXCLUDED.main_category,
+                sub_category = EXCLUDED.sub_category,
+                target_audience = EXCLUDED.target_audience,
+                l1_macro_tropes = EXCLUDED.l1_macro_tropes,
+                l2_micro_elements = EXCLUDED.l2_micro_elements,
+                dna_profile = EXCLUDED.dna_profile,
+                updated_at = NOW();
+            """
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(sql, (
                         book_key, title, author,
                         source_platform, rank_name, rank_position, board_type,
-                        heat_score, days_on_rank, lifecycle_stage,
+                        heat_score, initial_days, lifecycle_stage,
                         gender_track, main_category, sub_category, target_audience,
                         l1_tropes, l2_tropes,
                         json.dumps(profile, ensure_ascii=False)
@@ -310,7 +382,6 @@ class PgNovelStorage:
         except Exception as e:
             print(f"[PgNovelStorage] 写入《{title}》失败: {e}")
             return False
-
     def get_all_profiles(self) -> List[NovelDnaProfile]:
         """从 PostgreSQL 加载所有 active 状态小说的 DNA 模型"""
         sql = "SELECT dna_profile FROM novel_dna_records WHERE status = 'active' ORDER BY heat_score DESC;"
@@ -380,6 +451,7 @@ class PgNovelStorage:
     def save_crawled_books(self, books: List[Any]) -> int:
         """
         批量将四大平台抓取到的实时榜单作品保存到 PostgreSQL 数据表 crawled_ranking_books
+        支持自动维护作品首次抓取时间 first_crawled_at
         """
         if not books:
             return 0
@@ -398,9 +470,11 @@ class PgNovelStorage:
             intro TEXT DEFAULT '',
             book_url TEXT DEFAULT '',
             heat_score NUMERIC(5, 2) DEFAULT 80.00,
+            first_crawled_at TIMESTAMPTZ DEFAULT NOW(),
             fetched_at TIMESTAMPTZ DEFAULT NOW(),
             CONSTRAINT uq_platform_rank_pos UNIQUE (platform, rank_name, rank_position)
         );
+        ALTER TABLE crawled_ranking_books ADD COLUMN IF NOT EXISTS first_crawled_at TIMESTAMPTZ DEFAULT NOW();
         CREATE INDEX IF NOT EXISTS idx_crawled_platform ON crawled_ranking_books(platform, rank_name);
         CREATE INDEX IF NOT EXISTS idx_crawled_title ON crawled_ranking_books(title, author);
         """
@@ -408,14 +482,19 @@ class PgNovelStorage:
         INSERT INTO crawled_ranking_books (
             book_id, title, author, platform, channel,
             rank_name, rank_position, category, intro, book_url,
-            heat_score, fetched_at
+            heat_score, first_crawled_at, fetched_at
         ) VALUES (
             %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s,
-            %s, NOW()
+            %s, NOW(), NOW()
         )
         ON CONFLICT (platform, rank_name, rank_position) DO UPDATE SET
             book_id = EXCLUDED.book_id,
+            first_crawled_at = CASE 
+                WHEN crawled_ranking_books.title != EXCLUDED.title OR crawled_ranking_books.author != EXCLUDED.author 
+                THEN NOW() 
+                ELSE COALESCE(crawled_ranking_books.first_crawled_at, crawled_ranking_books.fetched_at, NOW())
+            END,
             title = EXCLUDED.title,
             author = EXCLUDED.author,
             category = EXCLUDED.category,
@@ -445,9 +524,44 @@ class PgNovelStorage:
                         ))
                         saved += 1
                 conn.commit()
+            # 自动刷新跌出榜单书籍的生命周期与衰减状态 (0.35x)
+            dropped_cnt = self.refresh_dropped_books_status()
+            if dropped_cnt > 0:
+                print(f"[PgNovelStorage] 探测到 {dropped_cnt} 部作品已跌出各大榜单，已自动降权至 DROPPED (0.35x)")
             return saved
         except Exception as e:
             print(f"[PgNovelStorage] 批量写入抓取书籍失败: {e}")
+            return 0
+
+    def refresh_dropped_books_status(self) -> int:
+        """
+        比对当前 crawled_ranking_books 实时榜单席位，
+        将已经跌出全网四大平台各大榜单的作品自动标记为 is_currently_on_rank = FALSE，
+        时效阶段流转为 DROPPED (跌榜淘汰期)，热度深度衰减为 0.35x
+        """
+        sql = """
+        UPDATE novel_dna_records d
+        SET is_currently_on_rank = FALSE,
+            lifecycle_stage = 'DROPPED',
+            heat_score = LEAST(100.0, ROUND((
+                GREATEST(60.0, 100.0 - 15.0 * LOG(GREATEST(1, d.rank_position))) * 0.35
+            )::numeric, 2)),
+            updated_at = NOW()
+        WHERE d.is_currently_on_rank = TRUE
+          AND NOT EXISTS (
+              SELECT 1 FROM crawled_ranking_books c
+              WHERE c.title = d.title AND c.author = d.author
+          );
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(sql)
+                    updated = cur.rowcount
+                conn.commit()
+            return updated
+        except Exception as e:
+            print(f"[PgNovelStorage] 刷新跌榜作品状态异常: {e}")
             return 0
 
     def get_crawled_books_count(self) -> int:
@@ -713,7 +827,8 @@ def seed_database():
             rank_name=meta["rank_name"],
             rank_position=meta["rank_position"],
             board_type=meta["board_type"],
-            days_on_rank=meta["days_on_rank"]
+            days_on_rank=meta["days_on_rank"],
+            force_days=True
         )
         print(f"  -> 《{prof['title']}》（{prof['author']}）[{meta['source_platform']} - {meta['rank_name']} 第{meta['rank_position']}名]: {'成功写入' if success else '写入失败'}")
 

@@ -1,0 +1,17 @@
+{
+  // 项目必须使用 Python 3.10：cv2 / playwright / psycopg2 / librosa / PySide6 都装在该解释器下。
+  // 若换了机器，把下面的路径改成你自己的 Python 3.10 解释器。
+  "python.defaultInterpreterPath": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}"
+  ],
+  "python.analysis.typeCheckingMode": "basic",
+  "python.terminal.activateEnvironment": false,
+  "files.encoding": "utf8",
+  "files.eol": "\r\n",
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "scratch": true
+  }
+}

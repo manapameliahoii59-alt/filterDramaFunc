@@ -1,0 +1,59 @@
+{
+  // VS Code 运行 / 调试配置
+  // 注意：python 字段是本机 Python 3.10 的绝对路径（项目依赖都装在这个解释器里）。
+  // 换机器时改成你自己的 Python 3.10 路径，或删掉该字段改用右下角选择的解释器。
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "启动桌面端应用",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "desktop_app.app",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "python": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe"
+    },
+    {
+      "name": "命令行：执行粗筛 (main.py)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "python": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe"
+    },
+    {
+      "name": "命令行：常读同步剧目",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/fetch_from_changdu.py",
+      "args": ["--limit", "30", "--days", "30"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "python": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe"
+    },
+    {
+      "name": "命令行：小说风向标",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/sync_novel_trends.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "python": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe"
+    },
+    {
+      "name": "当前文件",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "python": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe"
+    }
+  ]
+}

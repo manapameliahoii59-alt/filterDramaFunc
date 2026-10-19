@@ -69,3 +69,29 @@ class NovelDnaProfile(BaseModel):
     hierarchical_tropes: Dict[str, List[str]] = Field(default_factory=dict, description="L1宏观母题(3~5个)与L2微观情节词(8~12个)")
     compliance_risk: Dict[str, str] = Field(default_factory=dict, description="合规与题材风控标记")
 
+
+class NovelChapter(BaseModel):
+    """单章内容（目录标题或正文）"""
+    platform: str = Field(description="来源平台")
+    book_id: str = Field(description="平台书籍 ID")
+    chapter_index: int = Field(default=0, description="章节序号（从 1 开始）")
+    chapter_id: str = Field(default="", description="平台章节 ID")
+    title: str = Field(default="", description="章节标题")
+    content: str = Field(default="", description="正文纯文本（未抓取时为空）")
+    is_free: bool = Field(default=True, description="是否免费章节")
+    word_count: int = Field(default=0, description="字数")
+    url: str = Field(default="", description="章节页 URL")
+    crawled_at: str = Field(default="", description="抓取时间")
+
+
+class NovelIntro(BaseModel):
+    """单本书籍的真实简介"""
+    platform: str = Field(description="来源平台")
+    book_id: str = Field(description="平台书籍 ID")
+    title: str = Field(default="", description="书名")
+    author: str = Field(default="", description="作者")
+    intro: str = Field(default="", description="简介正文")
+    url: str = Field(default="", description="书籍详情页 URL")
+    crawled_at: str = Field(default="", description="抓取时间")
+
+

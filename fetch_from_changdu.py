@@ -54,9 +54,11 @@ def main():
     parser.add_argument("--output", "-o", type=str, default=str(DEFAULT_OUTPUT_TXT), help="导出 txt 文件路径")
     parser.add_argument("--headless", action="store_true", default=True, help="是否无头后台运行浏览器")
     parser.add_argument("--no-headless", dest="headless", action="store_false", help="显示浏览器窗口运行")
+    parser.add_argument("--auth-file", type=str, default=None,
+                        help="登录态保存路径（默认 auth.json；多账号建议放 auth_pool/auth_xxx.json）")
     args = parser.parse_args()
 
-    auth_file = DEFAULT_AUTH_FILE
+    auth_file = Path(args.auth_file).resolve() if args.auth_file else DEFAULT_AUTH_FILE
 
     # 1. 显式要求重新登录
     if args.login:

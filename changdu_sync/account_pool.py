@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
 from .client import ChangduSyncClient, SERIES_LIST_PATH
+from .account_limits import LIMITS_FILENAME, get_limit
 from .detail_fetcher import (
     ChangduDetailFetcher,
     DramaDetailMaterial,
@@ -42,6 +43,9 @@ class AccountSession:
         self.cooling_until: float = 0.0
         self.request_count: int = 0
         self.account_id: str = auth_file.stem
+        # 单账号最多获取多少部筛选目标剧目（0 = 不限制）
+        self.max_dramas: int = get_limit(auth_file.name)
+        self.dramas_fetched: int = 0
 
     def ensure_connected(self):
         if self.client is None or self.client.page is None:
@@ -49,8 +53,11 @@ class AccountSession:
             self.client.connect()
             self.fetcher = ChangduDetailFetcher(self.client)
 
+    def is_quota_exhausted(self) -> bool:
+        return self.max_dramas > 0 and self.dramas_fetched >= self.max_dramas
+
     def is_available(self) -> bool:
-        return time.time() >= self.cooling_until
+        return time.time() >= self.cooling_until and not self.is_quota_exhausted()
 
     def mark_cooldown(self, seconds: float = 60.0):
         self.cooling_until = time.time() + seconds
@@ -75,16 +82,19 @@ class ChangduAccountPool:
         self._current_idx = 0
         self._total_requests = 0
 
-        # 发现账号文件
+        # 发现账号文件：auth_pool/*.json + 单账号 auth.json 一起纳入池
         auth_dir_path = Path(auth_dir or DEFAULT_AUTH_POOL_DIR).resolve()
         auth_files = []
         if auth_dir_path.exists() and auth_dir_path.is_dir():
-            auth_files = sorted(list(auth_dir_path.glob("*.json")))
+            auth_files = sorted(
+                p for p in auth_dir_path.glob("*.json")
+                if p.name != LIMITS_FILENAME
+            )
 
-        if not auth_files:
-            single_auth = Path(DEFAULT_AUTH_FILE).resolve()
-            if single_auth.is_file():
-                auth_files = [single_auth]
+        single_auth = Path(DEFAULT_AUTH_FILE).resolve()
+        resolved = {p.resolve() for p in auth_files}
+        if single_auth.is_file() and single_auth not in resolved:
+            auth_files.insert(0, single_auth)
 
         if not auth_files:
             raise FileNotFoundError(f"未找到任何常读登录凭证文件 (已检查 {DEFAULT_AUTH_FILE} 与 {auth_dir_path})")
@@ -103,22 +113,39 @@ class ChangduAccountPool:
         for s in self.sessions:
             s.close()
 
-    def _get_active_session(self) -> AccountSession:
-        """获取下一个可用账号（轮询 + 容灾冷却）"""
+    def _get_active_session(self, ignore_quota: bool = False) -> AccountSession:
+        """获取下一个可用账号（轮询 + 容灾冷却 + 单账号抓取上限）。"""
+
+        def usable(sess: AccountSession) -> bool:
+            if time.time() < sess.cooling_until:
+                return False
+            return ignore_quota or not sess.is_quota_exhausted()
+
         n = len(self.sessions)
         for _ in range(n):
             sess = self.sessions[self._current_idx % n]
             self._current_idx += 1
-            if sess.is_available():
+            if usable(sess):
                 sess.ensure_connected()
                 return sess
 
-        # 若全部都在冷却中，等待最早恢复的一个
-        min_cool = min(s.cooling_until for s in self.sessions)
+        # 没有可用账号：区分「全部达到单账号上限」与「都在冷却」
+        if not ignore_quota and all(s.is_quota_exhausted() for s in self.sessions):
+            raise RuntimeError("所有账号均已达到单账号抓取上限")
+
+        eligible = [s for s in self.sessions if ignore_quota or not s.is_quota_exhausted()]
+        if not eligible:
+            raise RuntimeError("所有账号均不可用")
+
+        min_cool = min(s.cooling_until for s in eligible)
         wait_sec = max(1.0, min_cool - time.time())
-        print(f"[账号池] 所有账号均处于冷却期，自动平滑休眠等待 {wait_sec:.1f} 秒...")
+        print(f"[账号池] 所有可用账号均处于冷却期，自动平滑休眠等待 {wait_sec:.1f} 秒...")
         time.sleep(wait_sec)
-        sess = self.sessions[0]
+        for sess in eligible:
+            if usable(sess):
+                sess.ensure_connected()
+                return sess
+        sess = eligible[0]
         sess.ensure_connected()
         return sess
 
@@ -157,7 +184,15 @@ class ChangduAccountPool:
         if not name_clean:
             return None
 
-        session = self._get_active_session()
+        try:
+            session = self._get_active_session()
+        except RuntimeError as exc:
+            print(f"  ⚠ {exc}，跳过常读检索，使用本地输入。")
+            return None
+
+        session.dramas_fetched += 1
+        if session.max_dramas > 0 and session.dramas_fetched == session.max_dramas:
+            print(f"  [账号池] 账号 {session.account_id} 已达到上限 {session.max_dramas} 部，后续停用。")
         self._apply_human_pacing(session)
 
         end = datetime.now()
@@ -282,7 +317,11 @@ class ChangduAccountPool:
         """
         阶段二调用：抓取第 1 集视频流并下载用于视听检测
         """
-        session = self._get_active_session()
+        try:
+            session = self._get_active_session(ignore_quota=True)
+        except RuntimeError as exc:
+            print(f"  ⚠ {exc}")
+            return None
         self._apply_human_pacing(session)
 
         save_dir = Path(dest_dir or (Path(__file__).parent.parent / "scratch" / "previews")).resolve()
@@ -310,7 +349,11 @@ class ChangduAccountPool:
         """
         方案 B：通过 Playwright 浏览器渲染解密播放器，捕获原生解密音频和高清画面帧
         """
-        session = self._get_active_session()
+        try:
+            session = self._get_active_session(ignore_quota=True)
+        except RuntimeError as exc:
+            print(f"  ⚠ {exc}")
+            return {"success": False, "error": str(exc)}
         self._apply_human_pacing(session)
         session.ensure_connected()
         return session.fetcher.capture_ep1_browser_media(

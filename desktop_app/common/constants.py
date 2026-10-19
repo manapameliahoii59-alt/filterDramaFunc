@@ -24,6 +24,7 @@ SCRIPT_FETCH = PROJECT_ROOT / "fetch_from_changdu.py"
 SCRIPT_TRENDS = PROJECT_ROOT / "sync_novel_trends.py"
 SCRIPT_RECORD = PROJECT_ROOT / "record_changdu_requests.py"
 SCRIPT_DNA = PROJECT_ROOT / "batch_ingest_dna.py"
+SCRIPT_CRAWL_MISSING = PROJECT_ROOT / "crawl_missing_chapters.py"
 
 # ---- 数据文件与产物 ----
 AUTH_FILE = PROJECT_ROOT / "auth.json"

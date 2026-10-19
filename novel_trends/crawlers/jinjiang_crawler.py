@@ -77,10 +77,10 @@ class JinjiangCrawler(BaseNovelCrawler):
                 if len(candidate_items) >= max_count:
                     break
 
-            # 并发抓取候选书籍的真实作者与标签信息 (线程池最大 12)
+            # 并发抓取候选书籍的真实作者与标签信息 (线程池最大 4，降低风控概率)
             bids_to_fetch = [bid for bid, _ in candidate_items if bid not in self._meta_cache]
             if bids_to_fetch:
-                with ThreadPoolExecutor(max_workers=12) as executor:
+                with ThreadPoolExecutor(max_workers=4) as executor:
                     futures = {executor.submit(self._fetch_book_meta, bid): bid for bid in bids_to_fetch}
                     for fut in as_completed(futures):
                         try:

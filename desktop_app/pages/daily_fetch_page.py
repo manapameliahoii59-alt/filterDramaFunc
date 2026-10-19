@@ -55,9 +55,26 @@ def _today_str(fmt: str = "%Y-%m-%d") -> str:
     return datetime.now().strftime(fmt)
 
 
-def _parse_date(text: str) -> datetime:
-    """把 YYYY-MM-DD 转成 datetime（当天 00:00:00）。"""
-    return datetime.strptime(text.strip(), "%Y-%m-%d")
+def _parse_datetime(text: str) -> datetime:
+    """解析时间输入，支持 YYYY-MM-DD HH:MM:SS / YYYY-MM-DD HH:MM / YYYY-MM-DD。"""
+    value = text.strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    raise ValueError(value)
+
+
+def _default_range() -> tuple[str, str]:
+    """默认抓取「明天」一整天：00:00:00 ~ 23:59:59。"""
+    tomorrow = datetime.now() + timedelta(days=1)
+    start = tomorrow.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = tomorrow.replace(hour=23, minute=59, second=59, microsecond=0)
+    return (
+        start.strftime("%Y-%m-%d %H:%M:%S"),
+        end.strftime("%Y-%m-%d %H:%M:%S"),
+    )
 
 
 def _format_ts(ts_ms: int | None) -> str:
@@ -160,16 +177,19 @@ class DailyFetchPage(BasePage):
 
         row.addSpacing(14)
         row.addWidget(BodyLabel("开始", card))
+        default_start, default_end = _default_range()
         self.start_edit = LineEdit(card)
-        self.start_edit.setText((datetime.now() - timedelta(days=6)).strftime("%Y-%m-%d"))
-        self.start_edit.setFixedWidth(110)
+        self.start_edit.setText(default_start)
+        self.start_edit.setFixedWidth(175)
+        self.start_edit.setPlaceholderText("YYYY-MM-DD HH:MM:SS")
         row.addWidget(self.start_edit)
 
         row.addSpacing(8)
         row.addWidget(BodyLabel("结束", card))
         self.end_edit = LineEdit(card)
-        self.end_edit.setText(datetime.now().strftime("%Y-%m-%d"))
-        self.end_edit.setFixedWidth(110)
+        self.end_edit.setText(default_end)
+        self.end_edit.setFixedWidth(175)
+        self.end_edit.setPlaceholderText("YYYY-MM-DD HH:MM:SS")
         row.addWidget(self.end_edit)
 
         row.addStretch(1)
@@ -265,17 +285,27 @@ class DailyFetchPage(BasePage):
             self.notify("正在抓取中", "请等待当前任务完成", "warning")
             return
 
-        # 解析日期
+        # 解析时间
         try:
-            start_dt = _parse_date(self.start_edit.text())
-            end_dt = _parse_date(self.end_edit.text())
-            end_dt = end_dt.replace(hour=23, minute=59, second=59)
+            start_text = self.start_edit.text().strip()
+            end_text = self.end_edit.text().strip()
+            start_dt = _parse_datetime(start_text)
+            end_dt = _parse_datetime(end_text)
+            # 只填了日期时补全时间：开始 00:00:00，结束 23:59:59
+            if len(start_text) <= 10:
+                start_dt = start_dt.replace(hour=0, minute=0, second=0)
+            if len(end_text) <= 10:
+                end_dt = end_dt.replace(hour=23, minute=59, second=59)
         except ValueError:
-            self.notify("日期格式错误", "请使用 YYYY-MM-DD 格式", "error")
+            self.notify(
+                "时间格式错误",
+                "请使用 YYYY-MM-DD HH:MM:SS 格式（也可只填 YYYY-MM-DD）",
+                "error",
+            )
             return
 
         if start_dt > end_dt:
-            self.notify("日期范围错误", "开始日期不能晚于结束日期", "error")
+            self.notify("时间范围错误", "开始时间不能晚于结束时间", "error")
             return
 
         email = self.email_edit.text().strip()
@@ -284,7 +314,9 @@ class DailyFetchPage(BasePage):
 
         self.log_view.clear()
         self.log_view.append_line("=" * 40)
-        self.log_view.append_line(f"开始抓取：{start_dt.date()} ~ {end_dt.date()}")
+        self.log_view.append_line(
+            f"开始抓取：{start_dt:%Y-%m-%d %H:%M:%S} ~ {end_dt:%Y-%m-%d %H:%M:%S}"
+        )
         self.log_view.append_line(f"最小集数 ≥ {min_chapter}")
         self.log_view.append_line("=" * 40)
 

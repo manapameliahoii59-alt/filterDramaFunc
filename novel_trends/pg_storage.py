@@ -47,15 +47,25 @@ class PgNovelStorage:
         self.config = _load_env_config()
 
     def get_connection(self):
-        """获取 psycopg2 数据库连接"""
-        return psycopg2.connect(
-            host=self.config["PG_HOST"],
-            port=int(self.config["PG_PORT"]),
-            dbname=self.config["PG_DATABASE"],
-            user=self.config["PG_USER"],
-            password=self.config["PG_PASSWORD"],
-            connect_timeout=10
-        )
+        """获取 psycopg2 数据库连接（带断连重试，规避远端偶发断连）"""
+        import time
+
+        last_error = None
+        for attempt in range(3):
+            try:
+                return psycopg2.connect(
+                    host=self.config["PG_HOST"],
+                    port=int(self.config["PG_PORT"]),
+                    dbname=self.config["PG_DATABASE"],
+                    user=self.config["PG_USER"],
+                    password=self.config["PG_PASSWORD"],
+                    connect_timeout=10,
+                )
+            except psycopg2.OperationalError as exc:
+                last_error = exc
+                if attempt < 2:
+                    time.sleep(1.5 * (attempt + 1))
+        raise last_error
 
     def init_database(self) -> bool:
         """
@@ -200,6 +210,41 @@ class PgNovelStorage:
         COMMENT ON COLUMN novel_dna_records.status IS '记录业务状态（active有效参与加权 / archived冷备归档）';
         COMMENT ON COLUMN novel_dna_records.created_at IS '基因特征首次分析建档时间戳';
         COMMENT ON COLUMN novel_dna_records.updated_at IS '基因或生命周期衰减最近一次更新时间戳';
+
+        -- 表 3: novel_chapters (网络文学榜单作品章节正文与目录表)
+        COMMENT ON TABLE novel_chapters IS '网络文学榜单作品章节正文与目录流水表';
+        COMMENT ON COLUMN novel_chapters.id IS '自增唯一主键 ID';
+        COMMENT ON COLUMN novel_chapters.platform IS '来源平台（起点/纵横/晋江/潇湘等）';
+        COMMENT ON COLUMN novel_chapters.book_id IS '原生平台书籍物理唯一 ID';
+        COMMENT ON COLUMN novel_chapters.chapter_index IS '章节序号（从 1 开始按序排布）';
+        COMMENT ON COLUMN novel_chapters.chapter_id IS '平台原生章节唯一编号';
+        COMMENT ON COLUMN novel_chapters.title IS '章节标题名称';
+        COMMENT ON COLUMN novel_chapters.content IS '正文纯文本内容';
+        COMMENT ON COLUMN novel_chapters.is_free IS '是否免费公开章节（TRUE免费 / FALSE付费）';
+        COMMENT ON COLUMN novel_chapters.word_count IS '章节纯文本有效字数';
+        COMMENT ON COLUMN novel_chapters.url IS '章节原生阅读落地页 URL';
+        COMMENT ON COLUMN novel_chapters.crawled_at IS '爬虫抓取落库时间戳';
+
+        -- 表 4: novel_intros (网络文学作品官方简介详情表)
+        COMMENT ON TABLE novel_intros IS '网络文学作品官方简介详情表';
+        COMMENT ON COLUMN novel_intros.id IS '自增唯一主键 ID';
+        COMMENT ON COLUMN novel_intros.platform IS '来源平台';
+        COMMENT ON COLUMN novel_intros.book_id IS '平台原生书籍 ID';
+        COMMENT ON COLUMN novel_intros.title IS '作品标准书名';
+        COMMENT ON COLUMN novel_intros.author IS '作者笔名';
+        COMMENT ON COLUMN novel_intros.intro IS '官方文案简介与核心人设剧情梗概';
+        COMMENT ON COLUMN novel_intros.url IS '书籍原生详情页 URL';
+        COMMENT ON COLUMN novel_intros.crawled_at IS '简介抓取落库时间戳';
+
+        -- 表 5: novel_content_status (小说正文抓取进度与完整度状态表)
+        COMMENT ON TABLE novel_content_status IS '小说正文抓取进度与完整度状态监控表';
+        COMMENT ON COLUMN novel_content_status.platform IS '来源平台';
+        COMMENT ON COLUMN novel_content_status.book_id IS '平台原生书籍 ID';
+        COMMENT ON COLUMN novel_content_status.target_chapters IS '目标计划抓取章节总数';
+        COMMENT ON COLUMN novel_content_status.content_chapters IS '已抓取并成功落库正文的章节数';
+        COMMENT ON COLUMN novel_content_status.title_chapters IS '已解析目录标题的章节数';
+        COMMENT ON COLUMN novel_content_status.exhausted IS '是否已抓取完该书所有可用章节';
+        COMMENT ON COLUMN novel_content_status.updated_at IS '状态最近一次更新时间戳';
         """
         try:
             with self.get_connection() as conn:
@@ -573,6 +618,255 @@ class PgNovelStorage:
                     return cur.fetchone()[0]
         except Exception:
             return 0
+
+    # ------------------------------------------------------------------
+    # 章节正文持久化
+    # ------------------------------------------------------------------
+    def init_content_tables(self) -> bool:
+        """创建章节表及索引（幂等）"""
+        ddl = """
+        CREATE TABLE IF NOT EXISTS novel_chapters (
+            id BIGSERIAL PRIMARY KEY,
+            platform VARCHAR(32) NOT NULL,
+            book_id VARCHAR(64) NOT NULL,
+            chapter_index INT NOT NULL,
+            chapter_id VARCHAR(64) DEFAULT '',
+            title VARCHAR(256) DEFAULT '',
+            content TEXT DEFAULT '',
+            is_free BOOLEAN DEFAULT TRUE,
+            word_count INT DEFAULT 0,
+            url TEXT DEFAULT '',
+            crawled_at TIMESTAMPTZ DEFAULT NOW(),
+            CONSTRAINT uq_novel_chapter UNIQUE (platform, book_id, chapter_index)
+        );
+        CREATE INDEX IF NOT EXISTS idx_chapters_book ON novel_chapters(platform, book_id);
+
+        CREATE TABLE IF NOT EXISTS novel_intros (
+            id BIGSERIAL PRIMARY KEY,
+            platform VARCHAR(32) NOT NULL,
+            book_id VARCHAR(64) NOT NULL,
+            title VARCHAR(256) DEFAULT '',
+            author VARCHAR(128) DEFAULT '',
+            intro TEXT DEFAULT '',
+            url TEXT DEFAULT '',
+            crawled_at TIMESTAMPTZ DEFAULT NOW(),
+            CONSTRAINT uq_novel_intro UNIQUE (platform, book_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_intros_book ON novel_intros(platform, book_id);
+
+        CREATE TABLE IF NOT EXISTS novel_content_status (
+            platform VARCHAR(32) NOT NULL,
+            book_id VARCHAR(64) NOT NULL,
+            target_chapters INT DEFAULT 0,
+            content_chapters INT DEFAULT 0,
+            title_chapters INT DEFAULT 0,
+            exhausted BOOLEAN DEFAULT FALSE,
+            updated_at TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (platform, book_id)
+        );
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(ddl)
+                conn.commit()
+            return True
+        except Exception as e:
+            print(f"[PgNovelStorage] 初始化章节/简介表失败: {e}")
+            return False
+
+    def save_chapters(self, chapters: List[Any]) -> int:
+        """批量 Upsert 章节（标题与正文）"""
+        if not chapters:
+            return 0
+        sql = """
+        INSERT INTO novel_chapters (
+            platform, book_id, chapter_index, chapter_id, title,
+            content, is_free, word_count, url, crawled_at
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+        ON CONFLICT (platform, book_id, chapter_index) DO UPDATE SET
+            chapter_id = EXCLUDED.chapter_id,
+            title = EXCLUDED.title,
+            content = CASE WHEN EXCLUDED.content <> '' THEN EXCLUDED.content ELSE novel_chapters.content END,
+            is_free = EXCLUDED.is_free,
+            word_count = GREATEST(novel_chapters.word_count, EXCLUDED.word_count),
+            url = EXCLUDED.url,
+            crawled_at = NOW();
+        """
+        saved = 0
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    for ch in chapters:
+                        cur.execute(sql, (
+                            getattr(ch, "platform", ""),
+                            getattr(ch, "book_id", ""),
+                            int(getattr(ch, "chapter_index", 0) or 0),
+                            getattr(ch, "chapter_id", "") or "",
+                            getattr(ch, "title", "") or "",
+                            getattr(ch, "content", "") or "",
+                            bool(getattr(ch, "is_free", True)),
+                            int(getattr(ch, "word_count", 0) or 0),
+                            getattr(ch, "url", "") or "",
+                        ))
+                        saved += 1
+                conn.commit()
+            return saved
+        except Exception as e:
+            print(f"[PgNovelStorage] 写入章节失败: {e}")
+            return 0
+
+    def save_intros(self, intros: List[Any]) -> int:
+        """批量 Upsert 书籍简介"""
+        if not intros:
+            return 0
+        sql = """
+        INSERT INTO novel_intros (platform, book_id, title, author, intro, url, crawled_at)
+        VALUES (%s,%s,%s,%s,%s,%s,NOW())
+        ON CONFLICT (platform, book_id) DO UPDATE SET
+            title = EXCLUDED.title,
+            author = EXCLUDED.author,
+            intro = CASE WHEN EXCLUDED.intro <> '' THEN EXCLUDED.intro ELSE novel_intros.intro END,
+            url = EXCLUDED.url,
+            crawled_at = NOW();
+        """
+        saved = 0
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    for it in intros:
+                        intro = (getattr(it, "intro", "") or "").strip()
+                        if not intro:
+                            continue
+                        cur.execute(sql, (
+                            getattr(it, "platform", ""),
+                            getattr(it, "book_id", ""),
+                            getattr(it, "title", "") or "",
+                            getattr(it, "author", "") or "",
+                            intro,
+                            getattr(it, "url", "") or "",
+                        ))
+                        saved += 1
+                conn.commit()
+            return saved
+        except Exception as e:
+            print(f"[PgNovelStorage] 写入简介失败: {e}")
+            return 0
+
+    def save_content_status(
+        self,
+        platform: str,
+        book_id: str,
+        target_chapters: int,
+        content_chapters: int,
+        title_chapters: int,
+        exhausted: bool,
+    ) -> bool:
+        """记录单本书的内容采集状态，供「补抓缺失/不足章节」判断。"""
+        sql = """
+        INSERT INTO novel_content_status (
+            platform, book_id, target_chapters, content_chapters,
+            title_chapters, exhausted, updated_at
+        ) VALUES (%s,%s,%s,%s,%s,%s,NOW())
+        ON CONFLICT (platform, book_id) DO UPDATE SET
+            target_chapters = EXCLUDED.target_chapters,
+            content_chapters = EXCLUDED.content_chapters,
+            title_chapters = EXCLUDED.title_chapters,
+            exhausted = EXCLUDED.exhausted,
+            updated_at = NOW();
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(sql, (
+                        platform, book_id, int(target_chapters),
+                        int(content_chapters), int(title_chapters), bool(exhausted),
+                    ))
+                conn.commit()
+            return True
+        except Exception as e:
+            print(f"[PgNovelStorage] 写入内容采集状态失败: {e}")
+            return False
+
+    def get_chapter_count(self) -> int:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM novel_chapters;")
+                    return cur.fetchone()[0]
+        except Exception:
+            return 0
+
+    def get_intro_count(self) -> int:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM novel_intros;")
+                    return cur.fetchone()[0]
+        except Exception:
+            return 0
+
+    def count_missing_chapters(self, target_chapters: int = 10) -> int:
+        """统计仍需补抓章节的书：正文数 < 目标，且未被判定为「已抓完」。"""
+        sql = """
+        WITH books AS (
+            SELECT DISTINCT platform, book_id
+            FROM crawled_ranking_books
+            WHERE COALESCE(book_id, '') <> ''
+        ),
+        agg AS (
+            SELECT platform, book_id,
+                   COUNT(*) FILTER (WHERE content <> '') AS content_chapters
+            FROM novel_chapters
+            GROUP BY platform, book_id
+        )
+        SELECT COUNT(*)
+        FROM books b
+        LEFT JOIN agg a ON a.platform = b.platform AND a.book_id = b.book_id
+        LEFT JOIN novel_content_status s ON s.platform = b.platform AND s.book_id = b.book_id
+        WHERE COALESCE(a.content_chapters, 0) < %s
+          AND COALESCE(s.exhausted, FALSE) = FALSE;
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(sql, (int(target_chapters),))
+                    return int(cur.fetchone()[0])
+        except Exception:
+            return 0
+
+    def count_missing_chapters_by_platform(self, target_chapters: int = 10) -> Dict[str, int]:
+        """按平台统计仍需补抓章节的书。"""
+        sql = """
+        WITH books AS (
+            SELECT DISTINCT platform, book_id
+            FROM crawled_ranking_books
+            WHERE COALESCE(book_id, '') <> ''
+        ),
+        agg AS (
+            SELECT platform, book_id,
+                   COUNT(*) FILTER (WHERE content <> '') AS content_chapters
+            FROM novel_chapters
+            GROUP BY platform, book_id
+        )
+        SELECT b.platform, COUNT(*)
+        FROM books b
+        LEFT JOIN agg a ON a.platform = b.platform AND a.book_id = b.book_id
+        LEFT JOIN novel_content_status s ON s.platform = b.platform AND s.book_id = b.book_id
+        WHERE COALESCE(a.content_chapters, 0) < %s
+          AND COALESCE(s.exhausted, FALSE) = FALSE
+        GROUP BY b.platform ORDER BY b.platform;
+        """
+        result: Dict[str, int] = {}
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(sql, (int(target_chapters),))
+                    for platform, count in cur.fetchall():
+                        result[platform] = int(count)
+        except Exception:
+            pass
+        return result
 
 
 # ============================================================================

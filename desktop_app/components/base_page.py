@@ -9,7 +9,6 @@ from qfluentwidgets import (
     BodyLabel,
     InfoBar,
     InfoBarPosition,
-    TitleLabel,
 )
 
 
@@ -57,7 +56,7 @@ class BasePage(QWidget):
         outer.setContentsMargins(28, 22, 28, 22)
         outer.setSpacing(12)
 
-        outer.addWidget(TitleLabel(title, self))
+        # 导航栏已经显示了页面名称，这里不再重复渲染大标题（title 仅保留作参数兼容）
         if subtitle:
             label = BodyLabel(subtitle, self)
             label.setWordWrap(True)

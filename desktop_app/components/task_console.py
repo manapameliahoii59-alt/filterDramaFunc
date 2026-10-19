@@ -58,6 +58,7 @@ class TaskConsole(CardWidget):
         layout.setSpacing(10)
 
         head = QHBoxLayout()
+        self._head_layout = head
         head.setSpacing(10)
         head.addWidget(StrongBodyLabel(title, self))
 
@@ -93,6 +94,14 @@ class TaskConsole(CardWidget):
 
     def set_run_text(self, text: str) -> None:
         self._run_btn.setText(text)
+
+    def add_action_widget(self, widget: QWidget) -> None:
+        """在头部操作区添加自定义控件（位于停止按钮左侧）。"""
+        idx = self._head_layout.indexOf(self._stop_btn)
+        if idx >= 0:
+            self._head_layout.insertWidget(idx, widget)
+        else:
+            self._head_layout.addWidget(widget)
 
     # ---- 状态 ----
     @property

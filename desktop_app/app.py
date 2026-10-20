@@ -31,6 +31,7 @@ from qfluentwidgets import (  # noqa: E402
 from desktop_app.common.constants import APP_NAME, APP_SUBTITLE, APP_VERSION  # noqa: E402
 from desktop_app.pages.account_page import AccountPage  # noqa: E402
 from desktop_app.pages.daily_fetch_page import DailyFetchPage  # noqa: E402
+from desktop_app.pages.novel_summary_page import NovelSummaryPage  # noqa: E402
 from desktop_app.pages.screening_page import ScreeningPage  # noqa: E402
 from desktop_app.pages.trends_page import TrendsPage  # noqa: E402
 
@@ -63,11 +64,13 @@ class MainWindow(FluentWindow):
         self._apply_initial_size()
 
         self.screening_page = ScreeningPage(self)
+        self.novel_summary_page = NovelSummaryPage(self)
         self.trends_page = TrendsPage(self)
         self.daily_fetch_page = DailyFetchPage(self)
         self.account_page = AccountPage(self)
 
         self.addSubInterface(self.screening_page, FIF.FILTER, "粗筛工作台")
+        self.addSubInterface(self.novel_summary_page, FIF.ROBOT, "小说DNA提取")
         self.addSubInterface(self.trends_page, FIF.MARKET, "小说风向标")
         self.addSubInterface(self.daily_fetch_page, FIF.CALENDAR, "每日筛选")
         self.addSubInterface(self.account_page, FIF.CONNECT, "常读账号")

@@ -10,69 +10,144 @@ from __future__ import annotations
 import json
 import os
 import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from dotenv import load_dotenv
 import requests
 
-load_dotenv(".env")
+# 优先定位项目根目录下的 .env，防止外部启动时找不到配置文件
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(_PROJECT_ROOT / ".env")
+
+
+def _load_env_keys() -> Tuple[str, str, str]:
+    """安全读取项目根目录 .env，获取 DASHSCOPE_API_KEY / DEEPSEEK_API_KEY / DASHSCOPE_MODEL。"""
+    env_file = _PROJECT_ROOT / ".env"
+    env_map: Dict[str, str] = {}
+    if env_file.exists():
+        try:
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        env_map[k.strip()] = v.strip()
+        except Exception:
+            pass
+
+    dashscope_key = os.environ.get("DASHSCOPE_API_KEY") or env_map.get("DASHSCOPE_API_KEY", "")
+    deepseek_key = os.environ.get("DEEPSEEK_API_KEY") or env_map.get("DEEPSEEK_API_KEY", "")
+    dashscope_model = os.environ.get("DASHSCOPE_MODEL") or env_map.get("DASHSCOPE_MODEL", "qwen3.8-flash")
+    return dashscope_key, deepseek_key, dashscope_model
 
 SYSTEM_PROMPT = """你是一个工业级的“网文与AI短剧/漫剧爆款基因（DNA）特征提取引擎”。
-你的任务是：深入阅读用户一次性提供的小说【前5~6章完整正文】及【前20章目录标题】，执行信噪比清洗，并严格按照指定的 JSON Schema 输出结构化爆款 DNA。该数据将用于与【未剪辑的AI短剧第一集原素材（台词与画面）】进行自动化特征碰撞筛选。
+你的任务是：深入阅读用户提供的小说【前5~6章完整正文】及【前20章目录标题】，执行信噪比清洗，并严格按照指定的 JSON Schema 提炼出 6 大黄金维度结构化爆款 DNA。
+提炼出的 6 大维度数据将直接用于与【第一集原素材（视频画面抽帧与台词字幕）】进行多级漏斗筛选、剧情骨架还原与核心脑洞比对。
 
-### 核心执行铁律（必须严格遵守）：
-1. 【识别并无视假简介】：网文的 `原始简介` 极可能包含“简介无力请看正文”、文艺腔废话或虚假信息。你必须以【开篇完整正文】和【前20章目录标题】反映的实际剧情作为 100% 唯一事实依据！若简介无效或与正文不符，将 `is_synopsis_valid` 设为 `false` 并彻底忽略简介。
-2. 【按章节分工提取（对齐短剧第一集浓缩节奏）】：短剧/漫剧的第一集通常会将小说前 5 章左右的剧情高密度浓缩。请按以下规则精准定位特征：
-   - 紧盯【第1~2章正文】提取：主角开局弱势状态（`surface_status`）、第一集导火索事件（`inciting_incident`）、以及第一集画面道具与台词锚点（`ep1_matching_anchors`）。
-   - 结合【第2~6章正文 + 前20章目录】提取：金手指/系统的具体运作规则（`cheat_specific_rule`）、隐藏身份（`hidden_or_awakened_identity`）、以及主角完成的第一次反击打脸爽点（`first_counterattack_payoff`）。
-3. 【锚点必须具象可感知】：提取 `key_props_and_scenes` 时，必须提取在视频画面中“肉眼可见”的具体物品、特效或场景（如：断绝关系协议书、B超单、极寒暴风雪、系统全息面板、百亿黑卡），严禁填写抽象形容词。
-4. 【纯净 JSON 输出】：仅输出合法的、可被程序直接解析的 JSON 字符串。严禁包含 ```json 等 Markdown 代码块标记，严禁输出任何解释性文字，不得缺失任何字段。
+### 6 大黄金维度提取清单与规范依据（必须严格遵守）：
 
-### 必须严格遵循的 JSON Schema 结构：
+1. 【数据质检与过滤 data_quality_check】
+   - 提取来源依据：对比简介与前 6 章正文。
+   - 在筛选“第一集原素材”时的实际用途：在代码里自动洗掉废书。如果前 6 章连外挂/破局底牌都没亮出来（has_payoff_in_opening = false），或者提取把握度为低（extraction_confidence = "低"），直接丢弃不入库。
+   - 字段规范：
+     * is_synopsis_valid (布尔值): 简介是否真实。若简介是“简介无力请看正文”、文艺腔废话或与正文实际剧情严重割裂不符，填 false 并彻底无视简介；否则填 true。
+     * has_payoff_in_opening (布尔值): 前 6 章是否有爽点、是否亮出破局底牌/外挂。若前 6 章连外挂/底牌都没亮出来，或者节奏拖沓毫无爽点推进，填 false；若已亮出底牌或完成反打脸立威，填 true。
+     * extraction_confidence (字符串): 提取把握度，仅限填 "高" / "中" / "低"。若正文严重缺失、篇幅过短或剧情混乱难以断定，填 "低"。
+
+2. 【赛道与世界观 track_dna】
+   - 提取来源依据：原站标签 + 前 6 章正文。
+   - 在筛选“第一集原素材”时的实际用途：第一层漏斗粗筛。先把“末日囤货”的原素材和“末日囤货”的小说分到同一个池子里，避免跨赛道乱匹配。
+   - 字段规范：
+     * gender_track (字符串): 男频 / 女频 / 泛性别。
+     * worldview_setting (字符串): 世界观基底（如：现代都市 / 末日天灾 / 规则怪谈 / 玄幻修仙 / 古代架空 / 脑洞变异 / 赛博科幻 / 悬疑惊悚）。
+     * core_sub_genre (字符串): 核心细分流派（如：末世囤货安全屋 / 真假千金断亲 / 全家偷听心声 / 神豪返利系统 / 战神隐忍退婚 / 四个首富哥哥团宠）。
+
+3. 【主角人设与破局底牌 protagonist_and_leverage_dna】(已兼容男女频)
+   - 提取来源依据：第 1~6 章正文 + 前 20 章目录。
+   - 在筛选“第一集原素材”时的实际用途：核心设定相似度比对（向量检索）。无论男频的“返利系统”，还是女频的“全家偷听心声 / 四个首富哥哥团宠”，原素材第一集必交代此设定，用来做核心脑洞匹配。
+   - 字段规范：
+     * surface_status (字符串): 开局（第 1~2 章）主角受迫害弱势状态（如：替假少爷顶罪坐牢归来一身伤病的病弱弃子 / 被掉包回归豪门遭全家嫌弃污蔑的乡下真千金）。
+     * hidden_or_awakened_identity (字符串): 真实隐藏身份或觉醒身份（如：唯一SSS级异能掌控者 / 跨国财阀唯一继承人 / 重生先知者 / 隐世鬼医传人）。
+     * leverage_category (字符串): 破局底牌 6 大分类之一，必须严格归入以下 6 类之一：
+       ① 系统面板类（返利/签到/百倍暴击/国运绑定等）
+       ② 重生先知类（知晓未来剧本/重生记忆差/提前囤货等）
+       ③ 异能空间类（全家偷听心声/随身无限空间/透视鉴宝/读心术等）
+       ④ 隐藏马甲类（首富团宠/战神殿主/隐世神医/顶级黑客等）
+       ⑤ 契约羁绊类（植物人大佬冲喜契约/四个顶级哥哥团宠/豪门假戏真做等）
+       ⑥ 极致智商类（反向整顿职场/高智商疯批/专业刑侦技能反杀等）
+     * leverage_specific_mechanism (字符串): 底牌具体运作规则。详细描述正文中展现的底牌具体运作机制与触发条件（如：“只要遭到假少爷挑衅贬低即可触发万倍返利并夺取对方气运”、“家里人能听到女主的心声从而提前识破绿茶假千金阴谋”）。
+
+4. 【开局冲突与反杀闭环 conflict_and_payoff_dna】
+   - 提取来源依据：第 1~6 章正文。
+   - 在筛选“第一集原素材”时的实际用途：第一集剧情骨架比对。短剧第一集就是“谁在迫害主角 → 发生了什么危机 → 主角怎么第一次反击”，用这 4 个字段还原第一集的故事线。
+   - 字段规范：
+     * antagonist_relationship (字符串): 开局第一顺位迫害者与主角的人物关系（如：偏心父母与绿茶假千金 / 势利丈母娘与吸血小舅子 / 抢功背叛的前女友）。
+     * inciting_incident (字符串): 第一集导火索事件（第 1 章正在发生的危机冲突，如：全家逼迫刚出狱的主角捐肾给假少爷 / 逼迫真千金代替养女嫁给残疾植物人）。
+     * extreme_aggro_behavior (字符串): 反派极度拉仇恨的具体恶行或道德绑架话术逻辑（如：一边霸占主角亡母抚恤金，一边把主角赶出家门冻死在雪地里）。
+     * first_counterattack_payoff (字符串): 第一次反击爽点（前 5~6 章内主角完成的第一次实质性反击、立威或打脸爽点，如：当场撕毁断亲书反手买下整个宴会厅打脸全场）。
+
+5. 【第一集音画匹配锚点 ep1_matching_anchors】
+   - 提取来源依据：严格锁定第 1~2 章正文！
+   - 在筛选“第一集原素材”时的实际用途：直接拿去撞原素材的画面和台词！看原素材抽帧里有没有这些道具（如：断亲书、系统弹窗、暴风雪），台词里有没有吵这些话题（如：逼让保送名额）。
+   - 字段规范：
+     * key_props_and_scenes (字符串数组): 提取 4~8 个视频画面中肉眼可见的具象道具、特效或场景锚点（如：断亲书、B超单、百亿黑卡、极寒暴风雪、系统全息弹窗、精神病院铁门、满屋囤积的米面粮油）。严禁填写抽象形容词！
+     * core_dialogue_themes (字符串数组): 提取 3~5 个第一集高频出现的吵架/冲突台词主题（如：逼让保送名额、嘲讽主角吃软饭入赘、末日倒计时疯狂借贷囤货、当众宣读退婚书）。
+     * character_archetypes (字符串数组): 提取出场人物典型标签（如：偏心生母、绿茶养妹、吸血鬼前女友、冷酷首富小叔、嚣张富二代）。
+
+6. 【二级爆款标签树 hierarchical_tropes】
+   - 提取来源依据：前 6 章正文 + 前 20 章目录。
+   - 在筛选“第一集原素材”时的实际用途：统计近期热榜风向标。算出最近 7 天哪些微观桥段（如 #开局签断亲书、#清空百亿物资）出现频率最高，给命中的原素材额外加权。
+   - 字段规范：
+     * l1_macro_tropes (字符串数组): 3~5 个宏观母题标签，带 # 号（如：#真假千金, #末日囤货, #战神归来, #全员读心, #绝不原谅）。
+     * l2_micro_elements (字符串数组): 8~12 个微观情节看点标签，带 # 号，提取具体情节动作、名场面（如：#开局签断亲书, #清空百亿物资, #雨夜罚跪, #当众退婚打脸, #打造末日避难所）。
+
+### 必须严格遵循的纯净 JSON 输出 Schema：
 {
-  "title": "字符串，书名",
-  "author": "字符串，作者",
+  "title": "书名",
+  "author": "作者",
   "data_quality_check": {
     "is_synopsis_valid": true,
     "has_payoff_in_opening": true,
-    "extraction_confidence": "高 / 中 / 低（若正文严重缺失或乱码则填低）"
+    "extraction_confidence": "高"
   },
   "track_dna": {
     "gender_track": "男频 / 女频 / 泛性别",
     "worldview_setting": "世界观基底（如：现代都市 / 末日天灾 / 规则怪谈 / 玄幻修仙 / 古代架空 / 脑洞变异）",
-    "core_sub_genre": "核心细分流派（如：末世囤货安全屋 / 真假千金断亲 / 全家偷听心声 / 神豪返利系统 / 战神隐忍退婚）"
+    "core_sub_genre": "核心细分流派（如：末世囤货安全屋 / 真假千金断亲 / 全家偷听心声 / 神豪返利系统 / 战神隐忍退婚 / 四个首富哥哥团宠）"
   },
-  "protagonist_and_cheat_dna": {
-    "surface_status": "开局（第1-2章）主角的弱势/受迫害状态（如：替假少爷顶罪坐牢归来一身伤病的弃子）",
-    "hidden_or_awakened_identity": "开篇揭露的真实隐藏身份或觉醒身份（如：唯一SSS级空间觉醒者 / 顶级财阀亲生继承人 / 重生先知者）",
-    "cheat_mechanism_type": "破局外挂分类（系统面板类 / 重生先知记忆差 / 特殊异能如读心透视 / 随身空间物资 / 无外挂纯靠大佬身份或智商）",
-    "cheat_specific_rule": "详细描述正文中展现的外挂具体运作机制与触发条件（如：只要遭到亲人贬低就能获得现金暴击并剥夺对方气运 / 家里人能听到婴儿女主的心声从而看穿反派阴谋）"
+  "protagonist_and_leverage_dna": {
+    "surface_status": "开局受迫害弱势状态",
+    "hidden_or_awakened_identity": "隐藏/觉醒身份",
+    "leverage_category": "系统面板类 / 重生先知类 / 异能空间类 / 隐藏马甲类 / 契约羁绊类 / 极致智商类",
+    "leverage_specific_mechanism": "底牌具体运作规则与触发机制"
   },
   "conflict_and_payoff_dna": {
-    "antagonist_relationship": "开局第一顺位迫害者与主角的人物关系（如：偏心眼亲生父母与绿茶假千金 / 嫌贫爱富的未婚妻一家）",
-    "inciting_incident": "开局核心导火索危机（第1章正在发生的具体冲突，如：全家逼迫刚出狱的主角捐出一颗肾给假少爷）",
-    "extreme_aggro_behavior": "反派极度拉仇恨的具体恶行或道德绑架话术逻辑（如：一边霸占主角的抚恤金，一边把主角赶出家门冻死在雪地里）",
-    "first_counterattack_payoff": "前5~6章内主角完成的第一次实质性反击、立威或打脸爽点事件（如：当场签下断亲书断绝供给，反手在拍卖会上用百亿黑卡碾压反派）"
+    "antagonist_relationship": "迫害者关系",
+    "inciting_incident": "第一集导火索事件",
+    "extreme_aggro_behavior": "反派拉仇恨恶行",
+    "first_counterattack_payoff": "第一次反击爽点"
   },
   "ep1_matching_anchors": {
     "key_props_and_scenes": [
-      "从前2章为主的正文中提取4~8个极具视觉辨识度的具体道具、特效或场景锚点（如：断绝关系协议书、B超单、百亿黑卡、极寒暴风雪、系统觉醒面板、精神病院大门、满屋囤积的米面粮油）"
+      "具象道具或场景1", "具象道具或场景2"
     ],
     "core_dialogue_themes": [
-      "从正文中提取3~5个第一集高频出现的台词冲突主题（如：逼迫让出保送名额、嘲讽主角吃软饭、末日倒计时疯狂借贷囤货、当众宣读退婚书）"
+      "吵架台词主题1", "吵架台词主题2"
     ],
     "character_archetypes": [
-      "提取开篇核心出场人物的典型人设标签（如：偏心亲妈、绿茶养妹、吸血鬼前女友、冷酷首富小叔、嚣张富二代）"
+      "典型人设1", "典型人设2"
     ]
   },
   "hierarchical_tropes": {
     "l1_macro_tropes": [
-      "3~5个宏观爆款母题标签，带#号，如：#末日囤货, #重生复仇, #全家火葬场, #系统神豪, #全员读心"
+      "#宏观母题1", "#宏观母题2"
     ],
     "l2_micro_elements": [
-      "8~12个开篇微观情节看点标签，带#号，结合前6章正文与前20章目录提取具体动作与名场面，如：#开局签断亲书, #变卖百亿家产囤货, #当众退婚打脸, #系统百倍返还, #打造末日安全屋"
+      "#微观情节1", "#微观情节2"
     ]
   }
-}"""
+}
+输出要求：直接输出标准 JSON，禁止任何前缀后缀说明，严禁包含 ```json 等 Markdown 标记，不得缺失任何字段。"""
 
 
 def build_user_prompt(
@@ -139,16 +214,14 @@ def _clean_json_text(text: str) -> str:
 def call_llm_extract_dna(
     user_prompt: str,
     system_prompt: str = SYSTEM_PROMPT,
-    timeout_sec: int = 90,
+    timeout_sec: int = 120,
 ) -> Tuple[bool, Dict[str, Any] | str]:
     """调用大模型（优先 DashScope Qwen3.8-Flash，故障/超时自动切备用 DeepSeek）提取 6 维 DNA。"""
-    dashscope_key = os.getenv("DASHSCOPE_API_KEY", "").strip()
-    deepseek_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
-    dashscope_model = os.getenv("DASHSCOPE_MODEL", "qwen3.8-flash").strip()
+    dashscope_key, deepseek_key, dashscope_model = _load_env_keys()
 
     errors = []
 
-    # 1. 尝试 DashScope
+    # 1. 尝试 DashScope (Qwen3.8-Flash，需显式关闭 thinking 避免耗费过长时间输出思考 Token 导致超时)
     if dashscope_key:
         try:
             resp = requests.post(
@@ -166,6 +239,7 @@ def call_llm_extract_dna(
                     "temperature": 0.2,
                     "max_tokens": 2500,
                     "response_format": {"type": "json_object"},
+                    "enable_thinking": False,
                 },
                 timeout=timeout_sec,
             )
@@ -209,9 +283,67 @@ def call_llm_extract_dna(
             errors.append(f"DeepSeek 请求异常: {e}")
 
     if not dashscope_key and not deepseek_key:
-        return False, "未配置 DASHSCOPE_API_KEY 或 DEEPSEEK_API_KEY，请检查 .env 文件。"
+        return False, "未配置 DASHSCOPE_API_KEY 或 DEEPSEEK_API_KEY，请检查项目根目录 .env 文件。"
 
     return False, "；".join(errors) if errors else "大模型调用未成功返回有效 JSON 数据。"
+
+
+def get_candidate_books_stats_from_db(platform: Optional[str] = None) -> Dict[str, Any]:
+    """查询数据库中章节已就绪网文的 DNA 提取全量统计（未处理数、已入库数、平台细分分布）。"""
+    from novel_trends.pg_storage import PgNovelStorage
+
+    storage = PgNovelStorage()
+    sql = """
+    SELECT 
+        sub.platform,
+        count(*) as total_ready,
+        count(*) FILTER (WHERE d_count = 0) as undone_count,
+        count(*) FILTER (WHERE d_count > 0) as done_count
+    FROM (
+        SELECT c.platform, c.book_id, count(d.id) as d_count
+        FROM novel_chapters c
+        LEFT JOIN novel_intros i ON i.platform = c.platform AND i.book_id = c.book_id
+        LEFT JOIN crawled_ranking_books b ON b.platform = c.platform AND b.book_id = c.book_id
+        LEFT JOIN novel_dna_records d ON d.book_key = (COALESCE(NULLIF(i.title, ''), b.title, '') || '_' || COALESCE(NULLIF(i.author, ''), b.author, ''))
+        GROUP BY c.platform, c.book_id
+        HAVING count(c.id) FILTER (WHERE length(COALESCE(c.content, '')) >= 50) >= 5
+    ) sub
+    GROUP BY sub.platform;
+    """
+    stats = {
+        "total_undone": 0,
+        "total_done": 0,
+        "total_ready": 0,
+        "by_platform": {},
+        "current_platform": platform or "全部平台",
+        "current_undone": 0,
+        "current_total": 0,
+    }
+    try:
+        with storage.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+                for plat, ready, undone, done in cur.fetchall():
+                    stats["total_undone"] += int(undone or 0)
+                    stats["total_done"] += int(done or 0)
+                    stats["total_ready"] += int(ready or 0)
+                    stats["by_platform"][plat] = {
+                        "total_ready": int(ready or 0),
+                        "undone": int(undone or 0),
+                        "done": int(done or 0),
+                    }
+
+        if platform and platform != "全部平台":
+            plat_data = stats["by_platform"].get(platform, {})
+            stats["current_undone"] = plat_data.get("undone", 0)
+            stats["current_total"] = plat_data.get("total_ready", 0)
+        else:
+            stats["current_undone"] = stats["total_undone"]
+            stats["current_total"] = stats["total_ready"]
+    except Exception as exc:
+        print(f"[novel_summary_engine] 查询候选书籍统计失败: {exc}")
+
+    return stats
 
 
 def fetch_candidate_books_from_db(
@@ -221,7 +353,7 @@ def fetch_candidate_books_from_db(
 ) -> List[Dict[str, Any]]:
     """从 PostgreSQL 中查询出已经抓取章节、适合进行 DNA 深度提取的书籍列表。
 
-    支持按平台筛选，以及仅筛选未提取 DNA 的小说。
+    支持按平台筛选，以及仅筛选未提取 DNA 的小说（要求有效正文章节数>=5）。
     """
     from novel_trends.pg_storage import PgNovelStorage
 
@@ -233,7 +365,7 @@ def fetch_candidate_books_from_db(
         where_clauses.append("c.platform = %s")
         params.append(platform)
 
-    having_clauses = ["count(c.id) >= 6"]
+    having_clauses = ["count(c.id) FILTER (WHERE length(COALESCE(c.content, '')) >= 50) >= 5"]
     if only_undone:
         having_clauses.append("bool_and(d.id IS NULL)")
 
@@ -246,7 +378,7 @@ def fetch_candidate_books_from_db(
            COALESCE(NULLIF(i.author, ''), NULLIF(b.author, ''), '未知作者') as author,
            COALESCE(b.category, '全网热门') as category,
            COALESCE(i.intro, b.intro, '') as intro,
-           count(c.id) as ch_cnt,
+           count(c.id) FILTER (WHERE length(COALESCE(c.content, '')) >= 50) as ch_cnt,
            d.id IS NOT NULL as has_dna,
            d.dna_profile
     FROM novel_chapters c
@@ -325,7 +457,7 @@ def extract_dna_for_book(
         return {
             "success": False,
             "status": "MISSING_CHAPTERS",
-            "message": f"正文章节不足（仅 {len(contents)} 章），无法执行开篇分析",
+            "message": f"正文章节不足（有效正文仅 {len(contents)} 章），无法分析开篇爽点，请先在【小说风向标】补抓该书章节正文",
             "elapsed": round(time.time() - start_t, 2),
             "dna": None,
         }
@@ -354,16 +486,29 @@ def extract_dna_for_book(
     dna_result = payload
     dq = dna_result.get("data_quality_check", {})
     has_payoff = dq.get("has_payoff_in_opening", True)
+    confidence = str(dq.get("extraction_confidence", "高")).strip()
+    is_low_conf = ("低" in confidence or confidence.lower() == "low")
 
-    if not has_payoff and discard_slow_burn:
-        return {
-            "success": True,
-            "status": "SLOW_BURN_DISCARDED",
-            "message": "开篇无爽点/极度慢热，代码直接丢弃不入库",
-            "elapsed": elapsed,
-            "dna": dna_result,
-            "saved_to_db": False,
-        }
+    # 数据质检与过滤：如果前 6 章连外挂/底牌都没亮出来（false），或者提取把握度为低，直接丢弃不入库
+    if discard_slow_burn:
+        if not has_payoff:
+            return {
+                "success": True,
+                "status": "SLOW_BURN_DISCARDED",
+                "message": "开篇无爽点/前6章未亮出破局底牌，代码直接丢弃不入库",
+                "elapsed": elapsed,
+                "dna": dna_result,
+                "saved_to_db": False,
+            }
+        if is_low_conf:
+            return {
+                "success": True,
+                "status": "LOW_CONFIDENCE_DISCARDED",
+                "message": f"提取把握度为低（{confidence}），代码直接丢弃不入库",
+                "elapsed": elapsed,
+                "dna": dna_result,
+                "saved_to_db": False,
+            }
 
     # 合格入库
     saved = save_dna_to_postgres(
@@ -546,11 +691,23 @@ def save_dna_to_postgres(
 
     track = dna_result.get("track_dna", {})
     gender_track = track.get("gender_track", "男频")
-    worldview = track.get("worldview_setting", "都市")
-    sub_genre = track.get("core_sub_genre", "通用")
+    worldview = track.get("worldview_setting") or track.get("main_category", "都市")
+    sub_genre = track.get("core_sub_genre") or track.get("sub_category", "通用")
 
-    protagonist = dna_result.get("protagonist_and_cheat_dna", {})
+    protagonist = (
+        dna_result.get("protagonist_and_leverage_dna")
+        or dna_result.get("protagonist_and_cheat_dna")
+        or dna_result.get("identity_contrast", {})
+    )
     target_audience = protagonist.get("surface_status", "")
+
+    worldview_setting = track.get("worldview_setting") or worldview
+    core_sub_genre = track.get("core_sub_genre") or sub_genre
+    leverage_category = protagonist.get("leverage_category") or protagonist.get("cheat_mechanism_type", "")
+    conflict = dna_result.get("conflict_and_payoff_dna", {})
+    first_payoff = conflict.get("first_counterattack_payoff", "")
+    dq = dna_result.get("data_quality_check", {})
+    extraction_confidence = str(dq.get("extraction_confidence", "高")).strip()
 
     tropes = dna_result.get("hierarchical_tropes", {})
     l1 = tropes.get("l1_macro_tropes", [])
@@ -564,6 +721,8 @@ def save_dna_to_postgres(
         source_platform, rank_name, rank_position, board_type,
         heat_score, days_on_rank, lifecycle_stage,
         gender_track, main_category, sub_category, target_audience,
+        worldview_setting, core_sub_genre, leverage_category,
+        first_counterattack_payoff, extraction_confidence,
         l1_macro_tropes, l2_micro_elements,
         dna_profile, updated_at
     ) VALUES (
@@ -571,6 +730,8 @@ def save_dna_to_postgres(
         %s, %s, %s, %s,
         %s, %s, %s,
         %s, %s, %s, %s,
+        %s, %s, %s,
+        %s, %s,
         %s, %s,
         %s, NOW()
     )
@@ -584,6 +745,11 @@ def save_dna_to_postgres(
         main_category = EXCLUDED.main_category,
         sub_category = EXCLUDED.sub_category,
         target_audience = EXCLUDED.target_audience,
+        worldview_setting = EXCLUDED.worldview_setting,
+        core_sub_genre = EXCLUDED.core_sub_genre,
+        leverage_category = EXCLUDED.leverage_category,
+        first_counterattack_payoff = EXCLUDED.first_counterattack_payoff,
+        extraction_confidence = EXCLUDED.extraction_confidence,
         l1_macro_tropes = EXCLUDED.l1_macro_tropes,
         l2_micro_elements = EXCLUDED.l2_micro_elements,
         dna_profile = EXCLUDED.dna_profile,
@@ -609,6 +775,11 @@ def save_dna_to_postgres(
                         worldview,
                         sub_genre,
                         target_audience[:120],
+                        worldview_setting,
+                        core_sub_genre,
+                        leverage_category,
+                        first_payoff,
+                        extraction_confidence,
                         l1,
                         l2,
                         json.dumps(dna_result, ensure_ascii=False),

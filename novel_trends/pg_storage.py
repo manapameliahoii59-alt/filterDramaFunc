@@ -105,6 +105,11 @@ class PgNovelStorage:
             main_category VARCHAR(32) NOT NULL,                     -- 主题材 (都市 / 现言 / 古言 / 玄幻 / 悬疑)
             sub_category VARCHAR(64) NOT NULL,                      -- 细分赛道 (真假千金马甲 / 战神出狱 / 精神病院怪谈)
             target_audience VARCHAR(128) DEFAULT '',                -- 受众画像
+            worldview_setting VARCHAR(64) DEFAULT '',               -- 【维度2】世界观基底
+            core_sub_genre VARCHAR(64) DEFAULT '',                  -- 【维度2】核心细分流派
+            leverage_category VARCHAR(32) DEFAULT '',               -- 【维度3】破局底牌6大分类
+            first_counterattack_payoff TEXT DEFAULT '',             -- 【维度4】第一集首次反击爽点事件
+            extraction_confidence VARCHAR(16) DEFAULT '高',         -- 【维度1】大模型提取把握度
             
             -- 5. 两级分层母题数组 (GIN 倒排索引极速比对)
             l1_macro_tropes TEXT[] NOT NULL DEFAULT '{}',           -- L1 宏观母题 (3~5个)
@@ -125,6 +130,12 @@ class PgNovelStorage:
 
         CREATE INDEX IF NOT EXISTS idx_novel_dna_sub 
             ON novel_dna_records (sub_category);
+
+        CREATE INDEX IF NOT EXISTS idx_novel_dna_leverage_cat 
+            ON novel_dna_records (leverage_category);
+
+        CREATE INDEX IF NOT EXISTS idx_novel_dna_core_sub_genre 
+            ON novel_dna_records (core_sub_genre);
 
         CREATE INDEX IF NOT EXISTS idx_novel_dna_rank 
             ON novel_dna_records (source_platform, rank_position);
@@ -151,6 +162,14 @@ class PgNovelStorage:
                         ALTER TABLE crawled_ranking_books ADD COLUMN IF NOT EXISTS first_crawled_at TIMESTAMPTZ DEFAULT NOW();
                         ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS first_ranked_at DATE DEFAULT CURRENT_DATE;
                         ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS last_ranked_at DATE DEFAULT CURRENT_DATE;
+                        ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS worldview_setting VARCHAR(64) DEFAULT '';
+                        ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS core_sub_genre VARCHAR(64) DEFAULT '';
+                        ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS leverage_category VARCHAR(32) DEFAULT '';
+                        ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS first_counterattack_payoff TEXT DEFAULT '';
+                        ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS extraction_confidence VARCHAR(16) DEFAULT '高';
+
+                        CREATE INDEX IF NOT EXISTS idx_novel_dna_leverage_cat ON novel_dna_records (leverage_category);
+                        CREATE INDEX IF NOT EXISTS idx_novel_dna_core_sub_genre ON novel_dna_records (core_sub_genre);
                     """)
                 conn.commit()
             print("[PgNovelStorage] PostgreSQL 表结构与 GIN 倒排索引初始化成功！")
@@ -185,7 +204,7 @@ class PgNovelStorage:
         COMMENT ON COLUMN crawled_ranking_books.fetched_at IS '爬虫抓取落盘或Upsert更新时间戳';
 
         -- 表 2: novel_dna_records (大盘网文 DNA 深度特征基因库表)
-        COMMENT ON TABLE novel_dna_records IS '大盘网文DNA深度特征基因库表（供短剧初筛加权打分匹配）';
+        COMMENT ON TABLE novel_dna_records IS '大盘网文DNA 6大黄金维度深度特征基因库表（供短剧初筛加权打分匹配）';
         COMMENT ON COLUMN novel_dna_records.id IS '自增唯一主键 ID';
         COMMENT ON COLUMN novel_dna_records.book_key IS '唯一业务主键（{书名}_{作者}，防重保证）';
         COMMENT ON COLUMN novel_dna_records.title IS '作品名称';
@@ -194,19 +213,24 @@ class PgNovelStorage:
         COMMENT ON COLUMN novel_dna_records.rank_name IS '所在核心榜单名称';
         COMMENT ON COLUMN novel_dna_records.rank_position IS '榜单位次（1~100）';
         COMMENT ON COLUMN novel_dna_records.board_type IS '榜单业务类型（NEW_TREND新晋潜力 / MONTHLY_HOT月度主力 / RETENTION_HOT高留存追读）';
-        COMMENT ON COLUMN novel_dna_records.heat_score IS '经方案B时效生命周期衰减后的有效大盘热度分（20.00~110.00）';
+        COMMENT ON COLUMN novel_dna_records.heat_score IS '经时效生命周期衰减后的有效大盘热度分（20.00~110.00）';
         COMMENT ON COLUMN novel_dna_records.first_ranked_at IS '首次在榜探测日期';
         COMMENT ON COLUMN novel_dna_records.last_ranked_at IS '最近一次探测在榜日期';
         COMMENT ON COLUMN novel_dna_records.days_on_rank IS '累计在榜天数（生命周期衰减核心输入变量）';
         COMMENT ON COLUMN novel_dna_records.is_currently_on_rank IS '当前是否在榜活跃（TRUE活跃 / FALSE跌出榜单）';
-        COMMENT ON COLUMN novel_dna_records.lifecycle_stage IS '极速AI短剧时效生命周期阶段（SUPER_EXPLODING极速爆发1-3天[1.25x] / PEAK_HARVEST黄金收割4-7天[1.15x] / SATURATED饱和内卷8-20天[0.80x] / OVERDUE超期长尾>20天[0.60x] / DROPPED跌出榜单[0.35x]）';
-        COMMENT ON COLUMN novel_dna_records.gender_track IS '性别受众赛道（男频 / 女频，初筛第一道粗滤红线）';
-        COMMENT ON COLUMN novel_dna_records.main_category IS '主题材分类（都市 / 现言 / 古言 / 玄幻 / 科幻 / 悬疑）';
-        COMMENT ON COLUMN novel_dna_records.sub_category IS '细分赛道切角（真假千金断亲 / 战神出狱清算 / 词条修仙带飞全族 / 读心发疯吃瓜等）';
-        COMMENT ON COLUMN novel_dna_records.target_audience IS '核心目标读者受众画像描述';
-        COMMENT ON COLUMN novel_dna_records.l1_macro_tropes IS 'L1宏观母题标签数组（GIN倒排索引，微秒级重叠比对）';
-        COMMENT ON COLUMN novel_dna_records.l2_micro_elements IS 'L2微观剧情爽点与经典道具元素数组（GIN倒排索引）';
-        COMMENT ON COLUMN novel_dna_records.dna_profile IS '完整6维结构化深度基因分析JSONB（含人设断层、开局危机钩子、破局爽点杠杆）';
+        COMMENT ON COLUMN novel_dna_records.lifecycle_stage IS '极速AI短剧时效生命周期阶段（SUPER_EXPLODING极速爆发 / PEAK_HARVEST黄金收割 / SATURATED饱和内卷 / OVERDUE超期长尾 / DROPPED跌出榜单）';
+        COMMENT ON COLUMN novel_dna_records.gender_track IS '【维度2】受众赛道（男频 / 女频 / 泛性别，第一层漏斗粗筛红线）';
+        COMMENT ON COLUMN novel_dna_records.worldview_setting IS '【维度2】世界观基底（现代都市 / 末日天灾 / 规则怪谈 / 玄幻修仙 / 古代架空 / 脑洞变异 等）';
+        COMMENT ON COLUMN novel_dna_records.core_sub_genre IS '【维度2】核心细分流派（末世囤货安全屋 / 真假千金断亲 / 全家偷听心声 / 神豪返利系统 等）';
+        COMMENT ON COLUMN novel_dna_records.leverage_category IS '【维度3】破局底牌6大分类（系统面板类 / 重生先知类 / 异能空间类 / 隐藏马甲类 / 契约羁绊类 / 极致智商类）';
+        COMMENT ON COLUMN novel_dna_records.first_counterattack_payoff IS '【维度4】第一集首次反击爽点事件描述（第一集剧情骨架比对）';
+        COMMENT ON COLUMN novel_dna_records.extraction_confidence IS '【维度1】大模型提取把握度（高 / 中 / 低，若正文缺失或低把握度自动洗掉丢弃）';
+        COMMENT ON COLUMN novel_dna_records.main_category IS '【兼容列】主题材/世界观基底（对齐 worldview_setting）';
+        COMMENT ON COLUMN novel_dna_records.sub_category IS '【兼容列】核心细分赛道流派（对齐 core_sub_genre）';
+        COMMENT ON COLUMN novel_dna_records.target_audience IS '【兼容列】开局弱势受迫害状态描述（surface_status）';
+        COMMENT ON COLUMN novel_dna_records.l1_macro_tropes IS '【维度6】L1宏观母题标签数组（带#号，GIN倒排索引，微秒级重叠比对）';
+        COMMENT ON COLUMN novel_dna_records.l2_micro_elements IS '【维度6】L2微观剧情名场面与看点标签数组（带#号，GIN倒排索引，近期风向标加权）';
+        COMMENT ON COLUMN novel_dna_records.dna_profile IS '【完整6维结构化深度基因分析JSONB】包含：1.数据质检过滤 2.赛道世界观 3.主角人设与破局底牌 4.开局冲突反杀 5.第一集音画匹配锚点 6.二级爆款标签树';
         COMMENT ON COLUMN novel_dna_records.status IS '记录业务状态（active有效参与加权 / archived冷备归档）';
         COMMENT ON COLUMN novel_dna_records.created_at IS '基因特征首次分析建档时间戳';
         COMMENT ON COLUMN novel_dna_records.updated_at IS '基因或生命周期衰减最近一次更新时间戳';
@@ -308,11 +332,24 @@ class PgNovelStorage:
         initial_days = days_on_rank if (days_on_rank is not None and days_on_rank > 0) else 1
         heat_score, lifecycle_stage = self.calculate_heat_score(rank_position, initial_days)
 
-        track_info = profile.get("track_and_audience", {})
+        track_info = profile.get("track_dna") or profile.get("track_and_audience", {})
         gender_track = track_info.get("gender_track", "男频")
-        main_category = track_info.get("main_category", "都市")
-        sub_category = track_info.get("sub_category", "通用")
-        target_audience = track_info.get("target_audience", "")
+        main_category = track_info.get("worldview_setting") or track_info.get("main_category", "都市")
+        sub_category = track_info.get("core_sub_genre") or track_info.get("sub_category", "通用")
+        protagonist = (
+            profile.get("protagonist_and_leverage_dna")
+            or profile.get("protagonist_and_cheat_dna", {})
+            or profile.get("identity_contrast", {})
+        )
+        target_audience = protagonist.get("surface_status", "") or track_info.get("target_audience", "")
+
+        worldview_setting = track_info.get("worldview_setting") or main_category
+        core_sub_genre = track_info.get("core_sub_genre") or sub_category
+        leverage_category = protagonist.get("leverage_category") or protagonist.get("cheat_mechanism_type", "")
+        conflict = profile.get("conflict_and_payoff_dna") or profile.get("opening_crisis_hook", {})
+        first_payoff = conflict.get("first_counterattack_payoff") or conflict.get("crisis_description", "")
+        dq = profile.get("data_quality_check", {})
+        confidence = str(dq.get("extraction_confidence", "高")).strip()
 
         tropes = profile.get("hierarchical_tropes", {})
         l1_tropes = tropes.get("l1_macro_tropes", [])
@@ -326,6 +363,8 @@ class PgNovelStorage:
                 heat_score, days_on_rank, lifecycle_stage,
                 first_ranked_at, last_ranked_at, is_currently_on_rank,
                 gender_track, main_category, sub_category, target_audience,
+                worldview_setting, core_sub_genre, leverage_category,
+                first_counterattack_payoff, extraction_confidence,
                 l1_macro_tropes, l2_micro_elements,
                 dna_profile, updated_at
             ) VALUES (
@@ -334,6 +373,8 @@ class PgNovelStorage:
                 %s, %s, %s,
                 CURRENT_DATE, CURRENT_DATE, TRUE,
                 %s, %s, %s, %s,
+                %s, %s, %s,
+                %s, %s,
                 %s, %s,
                 %s, NOW()
             )
@@ -351,6 +392,11 @@ class PgNovelStorage:
                 main_category = EXCLUDED.main_category,
                 sub_category = EXCLUDED.sub_category,
                 target_audience = EXCLUDED.target_audience,
+                worldview_setting = EXCLUDED.worldview_setting,
+                core_sub_genre = EXCLUDED.core_sub_genre,
+                leverage_category = EXCLUDED.leverage_category,
+                first_counterattack_payoff = EXCLUDED.first_counterattack_payoff,
+                extraction_confidence = EXCLUDED.extraction_confidence,
                 l1_macro_tropes = EXCLUDED.l1_macro_tropes,
                 l2_micro_elements = EXCLUDED.l2_micro_elements,
                 dna_profile = EXCLUDED.dna_profile,
@@ -364,6 +410,8 @@ class PgNovelStorage:
                 heat_score, days_on_rank, lifecycle_stage,
                 first_ranked_at, last_ranked_at, is_currently_on_rank,
                 gender_track, main_category, sub_category, target_audience,
+                worldview_setting, core_sub_genre, leverage_category,
+                first_counterattack_payoff, extraction_confidence,
                 l1_macro_tropes, l2_micro_elements,
                 dna_profile, updated_at
             ) VALUES (
@@ -372,6 +420,8 @@ class PgNovelStorage:
                 %s, %s, %s,
                 CURRENT_DATE, CURRENT_DATE, TRUE,
                 %s, %s, %s, %s,
+                %s, %s, %s,
+                %s, %s,
                 %s, %s,
                 %s, NOW()
             )
@@ -406,6 +456,11 @@ class PgNovelStorage:
                 main_category = EXCLUDED.main_category,
                 sub_category = EXCLUDED.sub_category,
                 target_audience = EXCLUDED.target_audience,
+                worldview_setting = EXCLUDED.worldview_setting,
+                core_sub_genre = EXCLUDED.core_sub_genre,
+                leverage_category = EXCLUDED.leverage_category,
+                first_counterattack_payoff = EXCLUDED.first_counterattack_payoff,
+                extraction_confidence = EXCLUDED.extraction_confidence,
                 l1_macro_tropes = EXCLUDED.l1_macro_tropes,
                 l2_micro_elements = EXCLUDED.l2_micro_elements,
                 dna_profile = EXCLUDED.dna_profile,
@@ -419,6 +474,8 @@ class PgNovelStorage:
                         source_platform, rank_name, rank_position, board_type,
                         heat_score, initial_days, lifecycle_stage,
                         gender_track, main_category, sub_category, target_audience,
+                        worldview_setting, core_sub_genre, leverage_category,
+                        first_payoff, confidence,
                         l1_tropes, l2_tropes,
                         json.dumps(profile, ensure_ascii=False)
                     ))

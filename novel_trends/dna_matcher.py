@@ -93,8 +93,9 @@ class DnaTrendMatcher:
             return 5.0, [], {"track_score": 5.0, "tone_score": 0.0, "contrast_score": 0.0, "crisis_score": 0.0, "tropes_score": 0.0}
 
         # 1. 赛道契合度 (20分)
-        gender = dna.track_and_audience.get("gender_track", "")
-        sub_cat = dna.track_and_audience.get("sub_category", "")
+        track_info = getattr(dna, "track_dna", None) or dna.track_and_audience or {}
+        gender = track_info.get("gender_track", "")
+        sub_cat = track_info.get("core_sub_genre") or track_info.get("sub_category", "")
         track_score = 0.0
 
         is_female_drama = any(w in text for w in ["千金", "真假千金", "嫡女", "庶妹", "夫人", "替嫁", "和离", "带宝", "带崽", "前夫", "总裁", "少夫人", "产房", "继母"])
@@ -121,6 +122,7 @@ class DnaTrendMatcher:
             tone_score = min(15.0, len(hit_tone) * 5.0)
 
         # 3. 身份反差匹配 (20分)
+        ident_info = getattr(dna, "protagonist_and_leverage_dna", None) or dna.identity_contrast or {}
         contrast_score = 0.0
         surface_kw = ["入赘", "白眼", "受辱", "被换", "乡下", "土包子", "替嫁", "残疾", "废柴", "弃子", "狱中", "入狱", "当年陷害"]
         hidden_kw = ["首富", "战神", "龙帅", "大权", "全能", "神医", "百亿", "财团", "股权", "大佬", "真实身份", "五十一", "将士", "归位", "龙王", "执掌"]
@@ -133,7 +135,13 @@ class DnaTrendMatcher:
 
         # 4. 开局冲突匹配 (20分)
         crisis_score = 0.0
-        crisis_type = dna.opening_crisis_hook.get("conflict_type", "") + " " + dna.opening_crisis_hook.get("crisis_description", "")
+        conflict_info = getattr(dna, "conflict_and_payoff_dna", None) or dna.opening_crisis_hook or {}
+        crisis_type = (
+            str(conflict_info.get("inciting_incident", "")) + " " +
+            str(conflict_info.get("antagonist_relationship", "")) + " " +
+            str(conflict_info.get("conflict_type", "")) + " " +
+            str(conflict_info.get("crisis_description", ""))
+        )
         # 提取危机特征词
         crisis_feature_words = ["掉包", "产房", "DNA", "亲子鉴定", "法庭", "退婚", "入狱", "陷害", "改嫁", "出狱", "夺走", "伪造", "断绝", "抛弃", "寿宴", "算账", "白眼", "入赘"]
         matched_crisis_words = [w for w in crisis_feature_words if w in text and w in crisis_type]

@@ -58,15 +58,31 @@ class NovelKnowledgeBase(BaseModel):
 
 
 class NovelDnaProfile(BaseModel):
-    """6 大黄金维度 + 12~18 个分层热词的标准 DNA 模型"""
+    """
+    小说 6 大核心维度爆款 DNA 深度模型 (最终定稿)
+    1. 数据质检与过滤 (data_quality_check)
+    2. 赛道与世界观 (track_dna)
+    3. 主角人设与破局底牌 (protagonist_and_leverage_dna)
+    4. 开局冲突与反杀闭环 (conflict_and_payoff_dna)
+    5. 第一集音画匹配锚点 (ep1_matching_anchors)
+    6. 二级爆款标签树 (hierarchical_tropes)
+    """
     title: str = Field(description="书名")
     author: str = Field(description="作者")
-    track_and_audience: Dict[str, Any] = Field(default_factory=dict, description="细分赛道与核心受众画像")
-    tone_and_intensity: Dict[str, Any] = Field(default_factory=dict, description="情绪调性与叙事烈度")
-    identity_contrast: Dict[str, Any] = Field(default_factory=dict, description="人设与极致身份反差")
-    opening_crisis_hook: Dict[str, Any] = Field(default_factory=dict, description="开局第一绝境与冲突钩子")
-    payoff_mode: Dict[str, Any] = Field(default_factory=dict, description="破局逆袭与爽点模式")
-    hierarchical_tropes: Dict[str, List[str]] = Field(default_factory=dict, description="L1宏观母题(3~5个)与L2微观情节词(8~12个)")
+    data_quality_check: Dict[str, Any] = Field(default_factory=dict, description="1. 数据质检与过滤 (is_synopsis_valid, has_payoff_in_opening, extraction_confidence)")
+    track_dna: Dict[str, Any] = Field(default_factory=dict, description="2. 赛道与世界观 (gender_track, worldview_setting, core_sub_genre)")
+    protagonist_and_leverage_dna: Dict[str, Any] = Field(default_factory=dict, description="3. 主角人设与破局底牌已兼容男女频 (surface_status, hidden_or_awakened_identity, leverage_category, leverage_specific_mechanism)")
+    conflict_and_payoff_dna: Dict[str, Any] = Field(default_factory=dict, description="4. 开局冲突与反杀闭环 (antagonist_relationship, inciting_incident, extreme_aggro_behavior, first_counterattack_payoff)")
+    ep1_matching_anchors: Dict[str, Any] = Field(default_factory=dict, description="5. 第一集音画匹配锚点 (key_props_and_scenes, core_dialogue_themes, character_archetypes)")
+    hierarchical_tropes: Dict[str, Any] = Field(default_factory=dict, description="6. 二级爆款标签树 (l1_macro_tropes, l2_micro_elements)")
+
+    # 兼容历史字段
+    track_and_audience: Dict[str, Any] = Field(default_factory=dict, description="兼容旧版：细分赛道与核心受众画像")
+    tone_and_intensity: Dict[str, Any] = Field(default_factory=dict, description="兼容旧版：情绪调性与叙事烈度")
+    identity_contrast: Dict[str, Any] = Field(default_factory=dict, description="兼容旧版：人设与极致身份反差")
+    opening_crisis_hook: Dict[str, Any] = Field(default_factory=dict, description="兼容旧版：开局第一绝境与冲突钩子")
+    payoff_mode: Dict[str, Any] = Field(default_factory=dict, description="兼容旧版：破局逆袭与爽点模式")
+    protagonist_and_cheat_dna: Dict[str, Any] = Field(default_factory=dict, description="兼容旧版：破局外挂")
     compliance_risk: Dict[str, str] = Field(default_factory=dict, description="合规与题材风控标记")
 
 

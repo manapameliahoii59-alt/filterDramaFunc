@@ -47,48 +47,58 @@ import threading
 
 DNA_KB_PATH = os.path.join(os.path.dirname(__file__), "data", "novel_dna_kb.json")
 
-SYSTEM_PROMPT = """你是一位拥有十年经验的资深网文IP总监与短剧总策划。你的分析客观、犀利、精准，擅长洞察故事核心冲突、人设反差、爆款叙事基因与短剧黄金三集爽点。
+SYSTEM_PROMPT = """你是一位拥有十年经验的资深网文IP总监与短剧总策划。你的分析客观、犀利、精准，擅长洞察故事核心冲突、人设反差、破局底牌与短剧第一集黄金爽点。
 请严格输出合法的标准 JSON 格式数据，不要输出任何 Markdown 标记或多余解释文字，直接以 '{' 开头，以 '}' 结尾。"""
 
-USER_PROMPT_TEMPLATE = """请根据以下网络小说的书名与作者，推测并提炼其核心故事基因与短剧改编爆款特征（若该书为你已知的作品，请优先基于实际真实情节提炼；若未完全收录，请结合书名与作者风格规律合理推演）。
+USER_PROMPT_TEMPLATE = """请根据以下网络小说的书名与作者，推测并提炼其核心故事基因与短剧改编 6 大黄金维度爆款特征（若该书为你已知的作品，请优先基于实际真实情节提炼；若未完全收录，请结合书名与作者风格规律合理推演）。
 
 书名：《{title}》
 作者：{author}
 
 【任务要求】：
-请严格按照以下 JSON Schema 输出标准 JSON 格式数据，不得缺失任何字段：
+请严格按照以下 6 大维度 JSON Schema 输出标准 JSON 格式数据，不得缺失任何字段：
 {{
   "title": "{title}",
   "author": "{author}",
-  "track_and_audience": {{
-    "gender_track": "男频 或 女频",
-    "main_category": "主题材（如：都市/现言/玄幻/古言）",
-    "sub_category": "细分赛道（如：战神回归/豪门先婚后爱/真假千金马甲/末世极寒/古言换身复仇）",
-    "target_audience": "核心受众群体画像（如：下沉男性中青年 / 一二线年轻白领女性 / 银发中老年）"
+  "data_quality_check": {{
+    "is_synopsis_valid": true,
+    "has_payoff_in_opening": true,
+    "extraction_confidence": "高"
   }},
-  "tone_and_intensity": {{
-    "narrative_pace": "叙事节奏（如：极致快节奏 / 快节奏 / 慢热）",
-    "emotional_tone": "情绪调性（如：强情绪反杀 / 极度压抑反转 / 轻松发疯整顿 / 催泪虐心 / 极致爽快）"
+  "track_dna": {{
+    "gender_track": "男频 / 女频 / 泛性别",
+    "worldview_setting": "世界观基底（如：现代都市 / 末日天灾 / 规则怪谈 / 玄幻修仙 / 古代架空 / 脑洞变异）",
+    "core_sub_genre": "核心细分流派（如：末世囤货安全屋 / 真假千金断亲 / 全家偷听心声 / 神豪返利系统 / 战神隐忍退婚 / 四个首富哥哥团宠）"
   }},
-  "identity_contrast": {{
-    "surface_identity": "开局表面受辱/被压迫/被轻视的身份",
-    "hidden_identity": "真实隐藏身份（大佬/首富/战神/神医/真千金等）",
-    "contrast_gap": "身份反差烈度描述"
+  "protagonist_and_leverage_dna": {{
+    "surface_status": "开局（第1-2章）主角受迫害弱势状态",
+    "hidden_or_awakened_identity": "隐藏/觉醒身份（如：唯一SSS级异能掌控者 / 跨国财阀唯一继承人 / 重生先知者）",
+    "leverage_category": "破局底牌6大分类之一：系统面板类 / 重生先知类 / 异能空间类 / 隐藏马甲类 / 契约羁绊类 / 极致智商类",
+    "leverage_specific_mechanism": "底牌具体运作规则与触发机制"
   }},
-  "opening_crisis_hook": {{
-    "conflict_type": "危机类型（如：被退婚/替嫁/假千金陷害/家族灭门/重病被抛弃/逼签断绝关系书）",
-    "crisis_description": "前60秒生死线核心冲突与迫害事件描述"
+  "conflict_and_payoff_dna": {{
+    "antagonist_relationship": "迫害者关系（如：偏心父母与绿茶假千金 / 势利丈母娘与小舅子）",
+    "inciting_incident": "第一集导火索事件（第1章发生的危机冲突）",
+    "extreme_aggro_behavior": "反派极度拉仇恨的具体恶行或道德绑架话术逻辑",
+    "first_counterattack_payoff": "前5~6章内主角完成的第一次实质性反击打脸爽点事件"
   }},
-  "payoff_mode": {{
-    "leverage": "破局依托（男频：金手指/系统/功法/认知差；女频：隐藏马甲/血缘反差/豪门契约/专业技能/信息差）",
-    "core_payoff": "核心爽点类型（打脸虐渣 / 追妻火葬场 / 权谋反杀 / 全家悔恨 / 绝不原谅）"
+  "ep1_matching_anchors": {{
+    "key_props_and_scenes": [
+      "4~8个视频画面中肉眼可见的具象道具或场景（如：断亲书、B超单、百亿黑卡、极寒暴风雪、系统弹窗）"
+    ],
+    "core_dialogue_themes": [
+      "3~5个第一集吵架/冲突台词主题（如：逼让保送名额、嘲讽主角吃软饭、末日倒计时借贷囤货）"
+    ],
+    "character_archetypes": [
+      "出场人物典型标签（如：偏心生母、绿茶养妹、冷酷首富小叔、嚣张富二代）"
+    ]
   }},
   "hierarchical_tropes": {{
     "l1_macro_tropes": [
-      "3~5个宏观母题标签，如：#真假千金, #追妻火葬场, #大女主复仇, #战神归来, #断绝关系"
+      "3~5个宏观母题标签，如：#真假千金, #末日囤货, #战神归来, #全员读心, #绝不原谅"
     ],
     "l2_micro_elements": [
-      "8~12个微观情节看点标签，必须细致展现具体剧情冲突、道具、动作与名场面，如：#替嫁植物人, #雨夜罚跪, #撕毁百亿婚书, #全家悔恨下跪, #绝不原谅, #抢夺母亲遗物"
+      "8~12个微观情节看点标签，必须细致展现具体剧情动作与名场面，如：#开局签断亲书, #清空百亿物资, #雨夜罚跪, #当众退婚打脸, #打造末日安全屋"
     ]
   }}
 }}"""

@@ -132,7 +132,8 @@ def process_single_book(book: Dict[str, Any], extractor: NovelDnaExtractor, stor
         board_type=b_type
     )
     if success:
-        sub = prof_dict.get("track_and_audience", {}).get("sub_category", "")
+        track = prof_dict.get("track_dna") or prof_dict.get("track_and_audience", {})
+        sub = track.get("core_sub_genre") or track.get("sub_category", "")
         l1 = prof_dict.get("hierarchical_tropes", {}).get("l1_macro_tropes", [])[:3]
         print(f"  ✅ [入库成功] 《{title}》（{author}）| 平台: {platform} - {rank_name} 第{rank_pos}名 | 耗时: {cost:.1f}s | 赛道: {sub} | 母题: {l1}")
         return True

@@ -32,8 +32,21 @@ class MetricCard(CardWidget):
         if accent is not None:
             self.set_accent(accent)
 
+        self._sub_caption = CaptionLabel("", self)
+        self._sub_caption.setTextColor("#888888", "#9E9E9E")
+        self._sub_caption.setVisible(False)
+        layout.addWidget(self._sub_caption)
+
     def set_value(self, value: object) -> None:
         self._value.setText(str(value))
+
+    def set_subtext(self, text: str) -> None:
+        if text:
+            self._sub_caption.setText(str(text))
+            self._sub_caption.setVisible(True)
+        else:
+            self._sub_caption.setText("")
+            self._sub_caption.setVisible(False)
 
     def set_accent(self, accent: Accent) -> None:
         if isinstance(accent, tuple):

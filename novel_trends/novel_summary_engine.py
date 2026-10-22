@@ -2,7 +2,7 @@
 """
 novel_trends/novel_summary_engine.py
 基于大模型（DashScope Qwen3.8-Flash / DeepSeek）提取网文 6 维爆款基因（DNA）的核心引擎。
-输入：前 5~6 章完整正文 + 前 20 章目录标题 + 简介与元数据。
+输入：前 5~6 章完整正文 + 前 40 章目录标题（连载不足有多少取多少） + 简介与元数据。
 输出：严格符合 JSON Schema 的 6 大模块结构化信息。
 """
 from __future__ import annotations
@@ -41,65 +41,68 @@ def _load_env_keys() -> Tuple[str, str, str]:
     return dashscope_key, deepseek_key, dashscope_model
 
 SYSTEM_PROMPT = """你是一个工业级的“网文与AI短剧/漫剧爆款基因（DNA）特征提取引擎”。
-你的任务是：深入阅读用户提供的小说【前5~6章完整正文】及【前20章目录标题】，执行信噪比清洗，并严格按照指定的 JSON Schema 提炼出 6 大黄金维度结构化爆款 DNA。
+你的任务是：深入阅读用户提供的小说【前5~6章完整正文】及【前50章目录标题（连载不足有多少取多少）】，执行信噪比清洗，并严格按照指定的 JSON Schema 提炼出 6 大黄金维度结构化爆款 DNA。
 提炼出的 6 大维度数据将直接用于与【第一集原素材（视频画面抽帧与台词字幕）】进行多级漏斗筛选、剧情骨架还原与核心脑洞比对。
 
 ### 6 大黄金维度提取清单与规范依据（必须严格遵守）：
 
 1. 【数据质检与过滤 data_quality_check】
    - 提取来源依据：对比简介与前 6 章正文。
-   - 在筛选“第一集原素材”时的实际用途：在代码里自动洗掉废书。如果前 6 章连外挂/破局底牌都没亮出来（has_payoff_in_opening = false），或者提取把握度为低（extraction_confidence = "低"），直接丢弃不入库。
+   - 在筛选“第一集原素材”时的实际用途：代码级自动过滤脏数据。若 has_hook_or_leverage_in_opening 为 false（极度慢热文）或提取把握度为 低，直接丢弃不入库。
    - 字段规范：
-     * is_synopsis_valid (布尔值): 简介是否真实。若简介是“简介无力请看正文”、文艺腔废话或与正文实际剧情严重割裂不符，填 false 并彻底无视简介；否则填 true。
-     * has_payoff_in_opening (布尔值): 前 6 章是否有爽点、是否亮出破局底牌/外挂。若前 6 章连外挂/底牌都没亮出来，或者节奏拖沓毫无爽点推进，填 false；若已亮出底牌或完成反打脸立威，填 true。
+     * is_synopsis_valid (布尔值): 简介是否有效。若简介是“简介无力请看正文”、文艺腔废话或与正文实际剧情严重割裂不符，填 false 并彻底无视简介；否则填 true。
+     * has_hook_or_leverage_in_opening (布尔值): 前 6 章是否已亮出危机与底牌。若前 6 章连外挂/底牌都没亮出来，或者节奏拖沓毫无危机与爽点推进（极度慢热文），填 false；若已亮出底牌或完成反打脸立威，填 true。
      * extraction_confidence (字符串): 提取把握度，仅限填 "高" / "中" / "低"。若正文严重缺失、篇幅过短或剧情混乱难以断定，填 "低"。
 
 2. 【赛道与世界观 track_dna】
    - 提取来源依据：原站标签 + 前 6 章正文。
-   - 在筛选“第一集原素材”时的实际用途：第一层漏斗粗筛。先把“末日囤货”的原素材和“末日囤货”的小说分到同一个池子里，避免跨赛道乱匹配。
+   - 在筛选“第一集原素材”时的实际用途：第一层漏斗粗筛。把原素材和小说按“末日囤货 / 真假千金 / 规则怪谈 / 都市神豪”分池，同赛道内进行比对，避免跨赛道乱匹配。
    - 字段规范：
      * gender_track (字符串): 男频 / 女频 / 泛性别。
      * worldview_setting (字符串): 世界观基底（如：现代都市 / 末日天灾 / 规则怪谈 / 玄幻修仙 / 古代架空 / 脑洞变异 / 赛博科幻 / 悬疑惊悚）。
-     * core_sub_genre (字符串): 核心细分流派（如：末世囤货安全屋 / 真假千金断亲 / 全家偷听心声 / 神豪返利系统 / 战神隐忍退婚 / 四个首富哥哥团宠）。
+     * core_sub_genre (字符串): 核心细分流派（如：末世囤货安全屋 / 真假千金断亲 / 全家偷听心声 / 神豪返利系统 / 战神隐忍退婚 / 四个首富哥哥团宠 / 闪婚千亿总裁）。
 
-3. 【主角人设与破局底牌 protagonist_and_leverage_dna】(已兼容男女频)
-   - 提取来源依据：第 1~6 章正文 + 前 20 章目录。
-   - 在筛选“第一集原素材”时的实际用途：核心设定相似度比对（向量检索）。无论男频的“返利系统”，还是女频的“全家偷听心声 / 四个首富哥哥团宠”，原素材第一集必交代此设定，用来做核心脑洞匹配。
+3. 【主角人设与破局底牌 protagonist_and_leverage_dna】(男女频双栖兼容)
+   - 提取来源依据：前 6 章正文 + 前 15 章目录。
+   - 在筛选“第一集原素材”时的实际用途：核心脑洞与设定匹配（向量检索）。兼容男频（系统面板/异能）与女频（偷听心声/空间/首富血缘/重生先知/闪婚大佬），直接比对原素材第一集亮出的核心设定。
    - 字段规范：
      * surface_status (字符串): 开局（第 1~2 章）主角受迫害弱势状态（如：替假少爷顶罪坐牢归来一身伤病的病弱弃子 / 被掉包回归豪门遭全家嫌弃污蔑的乡下真千金）。
-     * hidden_or_awakened_identity (字符串): 真实隐藏身份或觉醒身份（如：唯一SSS级异能掌控者 / 跨国财阀唯一继承人 / 重生先知者 / 隐世鬼医传人）。
+     * hidden_or_awakened_identity (字符串): 真实隐藏身份或觉醒身份（如：唯一SSS级异能掌控者 / 跨国财阀唯一继承人 / 重生先知者 / 隐世神医传人）。
      * leverage_category (字符串): 破局底牌 6 大分类之一，必须严格归入以下 6 类之一：
        ① 系统面板类（返利/签到/百倍暴击/国运绑定等）
        ② 重生先知类（知晓未来剧本/重生记忆差/提前囤货等）
        ③ 异能空间类（全家偷听心声/随身无限空间/透视鉴宝/读心术等）
        ④ 隐藏马甲类（首富团宠/战神殿主/隐世神医/顶级黑客等）
-       ⑤ 契约羁绊类（植物人大佬冲喜契约/四个顶级哥哥团宠/豪门假戏真做等）
+       ⑤ 契约羁绊类（闪婚千亿总裁/冲喜契约/四个首富哥哥团宠/豪门联姻等）
        ⑥ 极致智商类（反向整顿职场/高智商疯批/专业刑侦技能反杀等）
-     * leverage_specific_mechanism (字符串): 底牌具体运作规则。详细描述正文中展现的底牌具体运作机制与触发条件（如：“只要遭到假少爷挑衅贬低即可触发万倍返利并夺取对方气运”、“家里人能听到女主的心声从而提前识破绿茶假千金阴谋”）。
+     * leverage_specific_mechanism (字符串): 底牌具体运作逻辑。详细描述正文中展现的底牌具体运作机制与触发条件（如：“只要遭到假少爷挑衅贬低即可触发万倍返利并夺取对方气运”、“家里人能听到女主的心声从而提前识破绿茶假千金阴谋”）。
 
-4. 【开局冲突与反杀闭环 conflict_and_payoff_dna】
-   - 提取来源依据：第 1~6 章正文。
-   - 在筛选“第一集原素材”时的实际用途：第一集剧情骨架比对。短剧第一集就是“谁在迫害主角 → 发生了什么危机 → 主角怎么第一次反击”，用这 4 个字段还原第一集的故事线。
+4. 【开局冲突与爽点走向 conflict_and_payoff_dna】(破局与闭环分离)
+   - 提取来源依据：
+     • 11~14 严格看 前 6 章正文
+     • 15 重点看 第 16~50 章目录
+   - 在筛选“第一集原素材”时的实际用途：对齐第一集剧本骨架 + 验证后续爽感。用 11~14 精准匹配第一集原素材的“受虐→破局立威”剧情；用 15 验证这本小说后续高潮够不够爽。
    - 字段规范：
-     * antagonist_relationship (字符串): 开局第一顺位迫害者与主角的人物关系（如：偏心父母与绿茶假千金 / 势利丈母娘与吸血小舅子 / 抢功背叛的前女友）。
-     * inciting_incident (字符串): 第一集导火索事件（第 1 章正在发生的危机冲突，如：全家逼迫刚出狱的主角捐肾给假少爷 / 逼迫真千金代替养女嫁给残疾植物人）。
-     * extreme_aggro_behavior (字符串): 反派极度拉仇恨的具体恶行或道德绑架话术逻辑（如：一边霸占主角亡母抚恤金，一边把主角赶出家门冻死在雪地里）。
-     * first_counterattack_payoff (字符串): 第一次反击爽点（前 5~6 章内主角完成的第一次实质性反击、立威或打脸爽点，如：当场撕毁断亲书反手买下整个宴会厅打脸全场）。
+     * antagonist_relationship (字符串): 迫害者关系。开局第一顺位迫害者与主角的人物关系（如：偏心生母与绿茶假千金 / 势利丈母娘与吸血小舅子 / 抢功背叛的前女友）。
+     * inciting_incident (字符串): 第一集导火索危机。第 1 章正在发生的危机冲突（如：全家逼迫刚出狱的主角捐肾给假少爷 / 逼迫真千金代替养女嫁给残疾植物人 / 极寒末日倒计时主角被赶出家门）。
+     * extreme_aggro_behavior (字符串): 反派拉仇恨言行。反派极度拉仇恨的具体恶行或道德绑架话术逻辑（如：一边霸占主角亡母抚恤金，一边把主角赶出家门冻死在雪地里 / 撕毁录取通知书逼主角下跪认错）。
+     * opening_breakthrough_action (字符串): 开篇破局动作。前 5~6 章内主角完成的第一次实质性破局动作、立威或打脸反杀（如：当场撕毁断亲书反手买下整个宴会厅打脸全场 / 召唤SSS级黑龙当场捏碎退婚书 / 激活空间当夜清空全家百亿物资）。
+     * subsequent_payoff_trend (字符串): 后续打脸闭环走向。重点结合第 16~50 章目录推演后续高潮与打脸闭环（如：极寒末日全家冻馁上门乞讨被主角在恒温堡垒内吃火锅无视打脸 / 假千金连环翻车全家痛哭火葬场跪求原谅 / 主角登顶首富将仇人家族彻底送进监狱）。
 
 5. 【第一集音画匹配锚点 ep1_matching_anchors】
    - 提取来源依据：严格锁定第 1~2 章正文！
-   - 在筛选“第一集原素材”时的实际用途：直接拿去撞原素材的画面和台词！看原素材抽帧里有没有这些道具（如：断亲书、系统弹窗、暴风雪），台词里有没有吵这些话题（如：逼让保送名额）。
+   - 在筛选“第一集原素材”时的实际用途：跨模态硬碰撞抓手！直接拿去撞第一集原素材的【画面抽帧物体】和【ASR台词文本】，命中率极高。
    - 字段规范：
-     * key_props_and_scenes (字符串数组): 提取 4~8 个视频画面中肉眼可见的具象道具、特效或场景锚点（如：断亲书、B超单、百亿黑卡、极寒暴风雪、系统全息弹窗、精神病院铁门、满屋囤积的米面粮油）。严禁填写抽象形容词！
-     * core_dialogue_themes (字符串数组): 提取 3~5 个第一集高频出现的吵架/冲突台词主题（如：逼让保送名额、嘲讽主角吃软饭入赘、末日倒计时疯狂借贷囤货、当众宣读退婚书）。
-     * character_archetypes (字符串数组): 提取出场人物典型标签（如：偏心生母、绿茶养妹、吸血鬼前女友、冷酷首富小叔、嚣张富二代）。
+     * key_props_and_scenes (字符串数组): 提取 4~8 个视频画面中肉眼可见的具象道具、场景词（如：断亲书、B超单、百亿黑卡、极寒暴风雪、系统全息弹窗、精神病院铁门、满屋囤积的米面粮油）。严禁填写抽象形容词！
+     * core_dialogue_themes (字符串数组): 提取 3~5 个第一集高频出现的台词吵架主题（如：逼让保送名额、嘲讽主角吃软饭入赘、末日倒计时疯狂借贷囤货、当众宣读退婚书）。
+     * character_archetypes (字符串数组): 提取出场人物典型人设（如：偏心生母、绿茶养妹、吸血鬼前女友、冷酷首富小叔、嚣张富二代）。
 
 6. 【二级爆款标签树 hierarchical_tropes】
-   - 提取来源依据：前 6 章正文 + 前 20 章目录。
-   - 在筛选“第一集原素材”时的实际用途：统计近期热榜风向标。算出最近 7 天哪些微观桥段（如 #开局签断亲书、#清空百亿物资）出现频率最高，给命中的原素材额外加权。
+   - 提取来源依据：前 6 章正文 + 前 50 章目录（新书连载不足50章则有多少参考多少）。
+   - 在筛选“第一集原素材”时的实际用途：统计热榜风向标。聚类统计近期日榜高频词（如 #开局签断亲书、#清空百亿物资），给命中的原素材额外加权。
    - 字段规范：
      * l1_macro_tropes (字符串数组): 3~5 个宏观母题标签，带 # 号（如：#真假千金, #末日囤货, #战神归来, #全员读心, #绝不原谅）。
-     * l2_micro_elements (字符串数组): 8~12 个微观情节看点标签，带 # 号，提取具体情节动作、名场面（如：#开局签断亲书, #清空百亿物资, #雨夜罚跪, #当众退婚打脸, #打造末日避难所）。
+     * l2_micro_elements (字符串数组): 8~12 个微观情节看点标签，带 # 号，提取具体情节动作、名场面（如：#开局签断亲书, #清空百亿物资, #雨夜罚跪, #当众退婚打脸, #打造末日避难所, #全家火葬场）。
 
 ### 必须严格遵循的纯净 JSON 输出 Schema：
 {
@@ -107,7 +110,7 @@ SYSTEM_PROMPT = """你是一个工业级的“网文与AI短剧/漫剧爆款基�
   "author": "作者",
   "data_quality_check": {
     "is_synopsis_valid": true,
-    "has_payoff_in_opening": true,
+    "has_hook_or_leverage_in_opening": true,
     "extraction_confidence": "高"
   },
   "track_dna": {
@@ -119,20 +122,21 @@ SYSTEM_PROMPT = """你是一个工业级的“网文与AI短剧/漫剧爆款基�
     "surface_status": "开局受迫害弱势状态",
     "hidden_or_awakened_identity": "隐藏/觉醒身份",
     "leverage_category": "系统面板类 / 重生先知类 / 异能空间类 / 隐藏马甲类 / 契约羁绊类 / 极致智商类",
-    "leverage_specific_mechanism": "底牌具体运作规则与触发机制"
+    "leverage_specific_mechanism": "底牌具体运作逻辑"
   },
   "conflict_and_payoff_dna": {
     "antagonist_relationship": "迫害者关系",
-    "inciting_incident": "第一集导火索事件",
-    "extreme_aggro_behavior": "反派拉仇恨恶行",
-    "first_counterattack_payoff": "第一次反击爽点"
+    "inciting_incident": "第一集导火索危机",
+    "extreme_aggro_behavior": "反派拉仇恨言行",
+    "opening_breakthrough_action": "开篇破局动作",
+    "subsequent_payoff_trend": "后续打脸闭环走向"
   },
   "ep1_matching_anchors": {
     "key_props_and_scenes": [
       "具象道具或场景1", "具象道具或场景2"
     ],
     "core_dialogue_themes": [
-      "吵架台词主题1", "吵架台词主题2"
+      "台词吵架主题1", "台词吵架主题2"
     ],
     "character_archetypes": [
       "典型人设1", "典型人设2"
@@ -160,12 +164,12 @@ def build_user_prompt(
 ) -> str:
     """按指定规范组装 User Prompt 一次性发给模型。
 
-    chapter_titles: 包含前 20 章标题列表
+    chapter_titles: 包含前 50 章标题列表（新书连载不满 50 章有多少取多少）
     chapter_contents: 包含 (章节标题, 章节正文) 的元组列表，一般取前 5~6 章
     """
     titles_block = "\n".join(
         f"第{idx+1}章 {t}" if not t.startswith("第") else t
-        for idx, t in enumerate(chapter_titles[:20])
+        for idx, t in enumerate(chapter_titles[:50])
     )
     if not titles_block.strip():
         titles_block = "（暂缺章节目录）"
@@ -186,10 +190,10 @@ def build_user_prompt(
 【原始简介（注意：可能存在乱写或无效废话，请务必与正文核对）】：
 {synopsis.strip() or '（无原始简介）'}
 
-【前20章章节标题目录（用于把握中前期爽点走向）】：
+【前50章章节目录（新书连载不足50章则提供现有全部目录；第1~15章用于提炼破局底牌，第16~50章用于提炼后续打脸闭环走向与爆款微观标签）】：
 {titles_block}
 
-【前6章完整正文（100%核心事实提取依据）】：
+【前6章完整正文（100%核心事实提取依据，用于提炼开篇危机、反派言行与破局动作，以及第1~2章音画匹配锚点）】：
 {chapters_block}"""
 
 
@@ -427,7 +431,7 @@ def extract_dna_for_book(
 ) -> Dict[str, Any]:
     """为单本小说执行端到端 DNA 提取与入库流程。
 
-    1. 从 DB 加载前 20 章目录与前 6 章正文
+    1. 从 DB 加载前 40 章目录与前 6 章正文
     2. 组装 user prompt
     3. 调用大模型（Qwen3.8-Flash / DeepSeek）
     4. 质检与慢热过滤：若 has_payoff_in_opening 为 False 且 discard_slow_burn 为 True，则丢弃不入库
@@ -485,17 +489,19 @@ def extract_dna_for_book(
 
     dna_result = payload
     dq = dna_result.get("data_quality_check", {})
-    has_payoff = dq.get("has_payoff_in_opening", True)
+    has_hook = dq.get("has_hook_or_leverage_in_opening")
+    if has_hook is None:
+        has_hook = dq.get("has_payoff_in_opening", True)
     confidence = str(dq.get("extraction_confidence", "高")).strip()
     is_low_conf = ("低" in confidence or confidence.lower() == "low")
 
-    # 数据质检与过滤：如果前 6 章连外挂/底牌都没亮出来（false），或者提取把握度为低，直接丢弃不入库
+    # 数据质检与过滤：若 has_hook_or_leverage_in_opening 为 false（极度慢热文）或提取把握度为 低，直接丢弃不入库
     if discard_slow_burn:
-        if not has_payoff:
+        if not has_hook:
             return {
                 "success": True,
                 "status": "SLOW_BURN_DISCARDED",
-                "message": "开篇无爽点/前6章未亮出破局底牌，代码直接丢弃不入库",
+                "message": "极度慢热文（前6章未亮出危机与破局底牌），代码直接丢弃不入库",
                 "elapsed": elapsed,
                 "dna": dna_result,
                 "saved_to_db": False,
@@ -530,7 +536,7 @@ def extract_dna_for_book(
 
 
 def load_book_context_from_db(platform: str, book_id: str) -> Dict[str, Any]:
-    """从 PostgreSQL 抓取该书籍的前 20 章标题与前 6 章完整正文，以及真实榜单排位数据。"""
+    """从 PostgreSQL 抓取该书籍的前 40 章标题与前 6 章完整正文，以及真实榜单排位数据。"""
     from novel_trends.pg_storage import PgNovelStorage
 
     storage = PgNovelStorage()
@@ -616,14 +622,14 @@ def load_book_context_from_db(platform: str, book_id: str) -> Dict[str, Any]:
                     context["rank_name"] = "月度排行榜"
                     context["board_type"] = "MONTHLY_HOT"
 
-                # 2. 查询前 20 章目录与前 6 章正文
+                # 2. 查询前 50 章目录与前 6 章正文
                 cur.execute(
                     """
                     SELECT chapter_index, title, content
                     FROM novel_chapters
                     WHERE platform = %s AND book_id = %s
                     ORDER BY chapter_index ASC
-                    LIMIT 20;
+                    LIMIT 50;
                     """,
                     (platform, book_id),
                 )
@@ -705,8 +711,14 @@ def save_dna_to_postgres(
     core_sub_genre = track.get("core_sub_genre") or sub_genre
     leverage_category = protagonist.get("leverage_category") or protagonist.get("cheat_mechanism_type", "")
     conflict = dna_result.get("conflict_and_payoff_dna", {})
-    first_payoff = conflict.get("first_counterattack_payoff", "")
+    opening_action = conflict.get("opening_breakthrough_action") or conflict.get("first_counterattack_payoff", "")
+    subsequent_payoff = conflict.get("subsequent_payoff_trend", "")
+    first_payoff = opening_action
     dq = dna_result.get("data_quality_check", {})
+    has_hook = dq.get("has_hook_or_leverage_in_opening")
+    if has_hook is None:
+        has_hook = dq.get("has_payoff_in_opening", True)
+    has_hook = bool(has_hook)
     extraction_confidence = str(dq.get("extraction_confidence", "高")).strip()
 
     tropes = dna_result.get("hierarchical_tropes", {})
@@ -722,7 +734,8 @@ def save_dna_to_postgres(
         heat_score, days_on_rank, lifecycle_stage,
         gender_track, main_category, sub_category, target_audience,
         worldview_setting, core_sub_genre, leverage_category,
-        first_counterattack_payoff, extraction_confidence,
+        first_counterattack_payoff, opening_breakthrough_action, subsequent_payoff_trend,
+        has_hook_or_leverage_in_opening, extraction_confidence,
         l1_macro_tropes, l2_micro_elements,
         dna_profile, updated_at
     ) VALUES (
@@ -730,6 +743,7 @@ def save_dna_to_postgres(
         %s, %s, %s, %s,
         %s, %s, %s,
         %s, %s, %s, %s,
+        %s, %s, %s,
         %s, %s, %s,
         %s, %s,
         %s, %s,
@@ -749,6 +763,9 @@ def save_dna_to_postgres(
         core_sub_genre = EXCLUDED.core_sub_genre,
         leverage_category = EXCLUDED.leverage_category,
         first_counterattack_payoff = EXCLUDED.first_counterattack_payoff,
+        opening_breakthrough_action = EXCLUDED.opening_breakthrough_action,
+        subsequent_payoff_trend = EXCLUDED.subsequent_payoff_trend,
+        has_hook_or_leverage_in_opening = EXCLUDED.has_hook_or_leverage_in_opening,
         extraction_confidence = EXCLUDED.extraction_confidence,
         l1_macro_tropes = EXCLUDED.l1_macro_tropes,
         l2_micro_elements = EXCLUDED.l2_micro_elements,
@@ -779,6 +796,9 @@ def save_dna_to_postgres(
                         core_sub_genre,
                         leverage_category,
                         first_payoff,
+                        opening_action,
+                        subsequent_payoff,
+                        has_hook,
                         extraction_confidence,
                         l1,
                         l2,

@@ -22,7 +22,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from novel_trends.models import NovelBook
 from novel_trends.pg_storage import PgNovelStorage
 from novel_trends.content_crawler import ContentCrawler
-from novel_trends.config import DEFAULT_CHAPTER_COUNT
+from novel_trends.config import DEFAULT_CHAPTER_COUNT, DEFAULT_TITLE_COUNT
 
 
 def count_missing(pg: PgNovelStorage, target: int = DEFAULT_CHAPTER_COUNT) -> int:
@@ -94,7 +94,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="补抓数据库中缺失章节内容的书籍")
     parser.add_argument("--limit", type=int, default=20,
                         help="每个网站本批最多抓取多少本书 (默认 20；0 表示全部)")
-    parser.add_argument("--titles", type=int, default=20, help="每本抓取的章节标题数量 (默认 20)")
+    parser.add_argument("--titles", type=int, default=DEFAULT_TITLE_COUNT,
+                        help=f"每本抓取的章节标题数量 (默认 {DEFAULT_TITLE_COUNT}，连载不足有多少抓多少)")
     parser.add_argument("--chapters", type=int, default=DEFAULT_CHAPTER_COUNT,
                         help=f"每本抓取的免费正文章节数量 (默认 {DEFAULT_CHAPTER_COUNT})")
     parser.add_argument("--delay", type=float, default=0.8,

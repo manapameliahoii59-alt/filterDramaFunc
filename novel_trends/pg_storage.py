@@ -108,7 +108,10 @@ class PgNovelStorage:
             worldview_setting VARCHAR(64) DEFAULT '',               -- 【维度2】世界观基底
             core_sub_genre VARCHAR(64) DEFAULT '',                  -- 【维度2】核心细分流派
             leverage_category VARCHAR(32) DEFAULT '',               -- 【维度3】破局底牌6大分类
-            first_counterattack_payoff TEXT DEFAULT '',             -- 【维度4】第一集首次反击爽点事件
+            first_counterattack_payoff TEXT DEFAULT '',             -- 【兼容字段】第一集首次反击爽点事件
+            opening_breakthrough_action TEXT DEFAULT '',            -- 【维度4】开篇破局动作
+            subsequent_payoff_trend TEXT DEFAULT '',                -- 【维度4】后续打脸闭环走向
+            has_hook_or_leverage_in_opening BOOLEAN DEFAULT TRUE,   -- 【维度1】前6章是否已亮出危机与底牌
             extraction_confidence VARCHAR(16) DEFAULT '高',         -- 【维度1】大模型提取把握度
             
             -- 5. 两级分层母题数组 (GIN 倒排索引极速比对)
@@ -166,6 +169,9 @@ class PgNovelStorage:
                         ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS core_sub_genre VARCHAR(64) DEFAULT '';
                         ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS leverage_category VARCHAR(32) DEFAULT '';
                         ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS first_counterattack_payoff TEXT DEFAULT '';
+                        ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS opening_breakthrough_action TEXT DEFAULT '';
+                        ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS subsequent_payoff_trend TEXT DEFAULT '';
+                        ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS has_hook_or_leverage_in_opening BOOLEAN DEFAULT TRUE;
                         ALTER TABLE novel_dna_records ADD COLUMN IF NOT EXISTS extraction_confidence VARCHAR(16) DEFAULT '高';
 
                         CREATE INDEX IF NOT EXISTS idx_novel_dna_leverage_cat ON novel_dna_records (leverage_category);
@@ -223,7 +229,10 @@ class PgNovelStorage:
         COMMENT ON COLUMN novel_dna_records.worldview_setting IS '【维度2】世界观基底（现代都市 / 末日天灾 / 规则怪谈 / 玄幻修仙 / 古代架空 / 脑洞变异 等）';
         COMMENT ON COLUMN novel_dna_records.core_sub_genre IS '【维度2】核心细分流派（末世囤货安全屋 / 真假千金断亲 / 全家偷听心声 / 神豪返利系统 等）';
         COMMENT ON COLUMN novel_dna_records.leverage_category IS '【维度3】破局底牌6大分类（系统面板类 / 重生先知类 / 异能空间类 / 隐藏马甲类 / 契约羁绊类 / 极致智商类）';
-        COMMENT ON COLUMN novel_dna_records.first_counterattack_payoff IS '【维度4】第一集首次反击爽点事件描述（第一集剧情骨架比对）';
+        COMMENT ON COLUMN novel_dna_records.first_counterattack_payoff IS '【兼容字段】第一集首次反击爽点事件描述（第一集剧情骨架比对）';
+        COMMENT ON COLUMN novel_dna_records.opening_breakthrough_action IS '【维度4】开篇破局动作（前5~6章实质反击或立威，对齐第一集剧本骨架）';
+        COMMENT ON COLUMN novel_dna_records.subsequent_payoff_trend IS '【维度4】后续打脸闭环走向（重点看第16~50章目录，验证后续高潮爽感）';
+        COMMENT ON COLUMN novel_dna_records.has_hook_or_leverage_in_opening IS '【维度1】前6章是否已亮出危机与底牌（FALSE为极度慢热废书自动丢弃）';
         COMMENT ON COLUMN novel_dna_records.extraction_confidence IS '【维度1】大模型提取把握度（高 / 中 / 低，若正文缺失或低把握度自动洗掉丢弃）';
         COMMENT ON COLUMN novel_dna_records.main_category IS '【兼容列】主题材/世界观基底（对齐 worldview_setting）';
         COMMENT ON COLUMN novel_dna_records.sub_category IS '【兼容列】核心细分赛道流派（对齐 core_sub_genre）';
@@ -347,8 +356,14 @@ class PgNovelStorage:
         core_sub_genre = track_info.get("core_sub_genre") or sub_category
         leverage_category = protagonist.get("leverage_category") or protagonist.get("cheat_mechanism_type", "")
         conflict = profile.get("conflict_and_payoff_dna") or profile.get("opening_crisis_hook", {})
-        first_payoff = conflict.get("first_counterattack_payoff") or conflict.get("crisis_description", "")
+        opening_action = conflict.get("opening_breakthrough_action") or conflict.get("first_counterattack_payoff") or conflict.get("crisis_description", "")
+        subsequent_trend = conflict.get("subsequent_payoff_trend", "")
+        first_payoff = opening_action
         dq = profile.get("data_quality_check", {})
+        has_hook = dq.get("has_hook_or_leverage_in_opening")
+        if has_hook is None:
+            has_hook = dq.get("has_payoff_in_opening", True)
+        has_hook = bool(has_hook)
         confidence = str(dq.get("extraction_confidence", "高")).strip()
 
         tropes = profile.get("hierarchical_tropes", {})
@@ -364,7 +379,8 @@ class PgNovelStorage:
                 first_ranked_at, last_ranked_at, is_currently_on_rank,
                 gender_track, main_category, sub_category, target_audience,
                 worldview_setting, core_sub_genre, leverage_category,
-                first_counterattack_payoff, extraction_confidence,
+                first_counterattack_payoff, opening_breakthrough_action, subsequent_payoff_trend,
+                has_hook_or_leverage_in_opening, extraction_confidence,
                 l1_macro_tropes, l2_micro_elements,
                 dna_profile, updated_at
             ) VALUES (
@@ -373,6 +389,7 @@ class PgNovelStorage:
                 %s, %s, %s,
                 CURRENT_DATE, CURRENT_DATE, TRUE,
                 %s, %s, %s, %s,
+                %s, %s, %s,
                 %s, %s, %s,
                 %s, %s,
                 %s, %s,
@@ -396,6 +413,9 @@ class PgNovelStorage:
                 core_sub_genre = EXCLUDED.core_sub_genre,
                 leverage_category = EXCLUDED.leverage_category,
                 first_counterattack_payoff = EXCLUDED.first_counterattack_payoff,
+                opening_breakthrough_action = EXCLUDED.opening_breakthrough_action,
+                subsequent_payoff_trend = EXCLUDED.subsequent_payoff_trend,
+                has_hook_or_leverage_in_opening = EXCLUDED.has_hook_or_leverage_in_opening,
                 extraction_confidence = EXCLUDED.extraction_confidence,
                 l1_macro_tropes = EXCLUDED.l1_macro_tropes,
                 l2_micro_elements = EXCLUDED.l2_micro_elements,
@@ -411,7 +431,8 @@ class PgNovelStorage:
                 first_ranked_at, last_ranked_at, is_currently_on_rank,
                 gender_track, main_category, sub_category, target_audience,
                 worldview_setting, core_sub_genre, leverage_category,
-                first_counterattack_payoff, extraction_confidence,
+                first_counterattack_payoff, opening_breakthrough_action, subsequent_payoff_trend,
+                has_hook_or_leverage_in_opening, extraction_confidence,
                 l1_macro_tropes, l2_micro_elements,
                 dna_profile, updated_at
             ) VALUES (
@@ -420,6 +441,7 @@ class PgNovelStorage:
                 %s, %s, %s,
                 CURRENT_DATE, CURRENT_DATE, TRUE,
                 %s, %s, %s, %s,
+                %s, %s, %s,
                 %s, %s, %s,
                 %s, %s,
                 %s, %s,
@@ -460,6 +482,9 @@ class PgNovelStorage:
                 core_sub_genre = EXCLUDED.core_sub_genre,
                 leverage_category = EXCLUDED.leverage_category,
                 first_counterattack_payoff = EXCLUDED.first_counterattack_payoff,
+                opening_breakthrough_action = EXCLUDED.opening_breakthrough_action,
+                subsequent_payoff_trend = EXCLUDED.subsequent_payoff_trend,
+                has_hook_or_leverage_in_opening = EXCLUDED.has_hook_or_leverage_in_opening,
                 extraction_confidence = EXCLUDED.extraction_confidence,
                 l1_macro_tropes = EXCLUDED.l1_macro_tropes,
                 l2_micro_elements = EXCLUDED.l2_micro_elements,
@@ -475,7 +500,8 @@ class PgNovelStorage:
                         heat_score, initial_days, lifecycle_stage,
                         gender_track, main_category, sub_category, target_audience,
                         worldview_setting, core_sub_genre, leverage_category,
-                        first_payoff, confidence,
+                        first_payoff, opening_action, subsequent_trend,
+                        has_hook, confidence,
                         l1_tropes, l2_tropes,
                         json.dumps(profile, ensure_ascii=False)
                     ))

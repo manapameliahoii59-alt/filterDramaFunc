@@ -1,9 +1,9 @@
 """小说爆款基因（DNA）大模型批量提取工作台。
 
 支持对 PostgreSQL 中收录的网文进行全自动批量提取：
-- 按章节分工将小说【前 5~6 章完整正文 + 前 20 章目录标题】一次性发给大模型（Qwen3.8-Flash / DeepSeek）；
+- 按章节分工将小说【前 5~6 章完整正文 + 前 50 章目录标题】一次性发给大模型（Qwen3.8-Flash / DeepSeek）；
 - 执行 6 维爆款基因（DNA）结构化分析；
-- 质检与慢热过滤：开篇无爽点/无金手指（has_payoff_in_opening = False）自动丢弃不入库；
+- 质检与慢热过滤：开篇未亮出危机或底牌（has_hook_or_leverage_in_opening = False）或把握度为低自动丢弃不入库；
 - 合格数据自动写入 novel_dna_records；
 - 实时表格流式更新提取进度与入库状态。
 """
@@ -566,7 +566,9 @@ class NovelSummaryPage(BasePage):
 
             if has_dna and dna:
                 dq = dna.get("data_quality_check", {})
-                payoff = dq.get("has_payoff_in_opening", True)
+                payoff = dq.get("has_hook_or_leverage_in_opening")
+                if payoff is None:
+                    payoff = dq.get("has_payoff_in_opening", True)
                 conf = str(dq.get("extraction_confidence", "高")).strip()
                 is_low_conf = ("低" in conf or conf.lower() == "low")
                 synopsis_valid = dq.get("is_synopsis_valid", True)
@@ -580,7 +582,7 @@ class NovelSummaryPage(BasePage):
 
                 # 5: 数据质检
                 if not payoff:
-                    q_text = "[淘汰] 无爽点底牌"
+                    q_text = "[淘汰] 未亮危机/底牌"
                     q_color = "#D32F2F"
                 elif is_low_conf:
                     q_text = f"[淘汰] 把握度低({conf})"
@@ -591,7 +593,7 @@ class NovelSummaryPage(BasePage):
 
                 item_q = QTableWidgetItem(q_text)
                 item_q.setForeground(QColor(q_color))
-                item_q.setToolTip(f"简介真实: {'是' if synopsis_valid else '否(已剔除假简介)'}\n开篇爽点: {'有' if payoff else '无(未亮出底牌)'}\n把握度: {conf}")
+                item_q.setToolTip(f"简介有效: {'是' if synopsis_valid else '否(已剔除假简介)'}\n开篇危机与底牌: {'已亮出' if payoff else '未亮出(极度慢热)'}\n把握度: {conf}")
                 self.table.setItem(row, 5, item_q)
 
                 # 6: 赛道
@@ -607,14 +609,16 @@ class NovelSummaryPage(BasePage):
                 item_lev.setToolTip(f"破局底牌分类: {lev_cat}\n底牌运作规则:\n{lev_rule}\n\n开局弱势: {prot.get('surface_status', '')}\n真实身份: {prot.get('hidden_or_awakened_identity', '')}")
                 self.table.setItem(row, 7, item_lev)
 
-                # 8: 反杀
-                c_payoff = conflict.get("first_counterattack_payoff", "")
+                # 8: 反杀/破局
+                c_payoff = conflict.get("opening_breakthrough_action") or conflict.get("first_counterattack_payoff", "")
+                c_trend = conflict.get("subsequent_payoff_trend", "")
                 item_payoff = QTableWidgetItem(c_payoff)
                 item_payoff.setToolTip(
-                    f"首个反杀爽点:\n{c_payoff}\n\n"
+                    f"开篇破局动作:\n{c_payoff}\n\n"
+                    f"后续打脸走向:\n{c_trend}\n\n"
                     f"迫害者关系: {conflict.get('antagonist_relationship', '')}\n"
-                    f"导火索事件: {conflict.get('inciting_incident', '')}\n"
-                    f"反派拉仇恨恶行: {conflict.get('extreme_aggro_behavior', '')}"
+                    f"导火索危机: {conflict.get('inciting_incident', '')}\n"
+                    f"反派拉仇恨言行: {conflict.get('extreme_aggro_behavior', '')}"
                 )
                 self.table.setItem(row, 8, item_payoff)
 
@@ -669,9 +673,11 @@ class NovelSummaryPage(BasePage):
             self.btn_copy_selected.setEnabled(True)
             self.btn_view_error.setEnabled(False)
             dq = dna.get("data_quality_check", {})
-            payoff = dq.get("has_payoff_in_opening", True)
+            payoff = dq.get("has_hook_or_leverage_in_opening")
+            if payoff is None:
+                payoff = dq.get("has_payoff_in_opening", True)
             conf = dq.get("extraction_confidence", "高")
-            self.lbl_progress_text.setText(f"已选中小说：《{book.get('title')}》（DNA提取完成 | 开篇爽点: {'有' if payoff else '无'} | 把握度: {conf}）")
+            self.lbl_progress_text.setText(f"已选中小说：《{book.get('title')}》（DNA提取完成 | 开篇底牌: {'有' if payoff else '无'} | 把握度: {conf}）")
         elif err_msg:
             self._current_selected_dna = None
             self.btn_copy_selected.setEnabled(False)
@@ -774,7 +780,9 @@ class NovelSummaryPage(BasePage):
         # 更新表格行单元格
         if dna:
             dq = dna.get("data_quality_check", {})
-            payoff = dq.get("has_payoff_in_opening", True)
+            payoff = dq.get("has_hook_or_leverage_in_opening")
+            if payoff is None:
+                payoff = dq.get("has_payoff_in_opening", True)
             conf = str(dq.get("extraction_confidence", "高")).strip()
             is_low_conf = ("低" in conf or conf.lower() == "low")
             synopsis_valid = dq.get("is_synopsis_valid", True)
@@ -790,7 +798,7 @@ class NovelSummaryPage(BasePage):
             item_q = self.table.item(idx, 5)
             if item_q:
                 if not payoff:
-                    q_text = "[淘汰] 无爽点底牌"
+                    q_text = "[淘汰] 未亮危机/底牌"
                     q_color = "#D32F2F"
                 elif is_low_conf:
                     q_text = f"[淘汰] 把握度低({conf})"
@@ -800,7 +808,7 @@ class NovelSummaryPage(BasePage):
                     q_color = "#2E7D32"
                 item_q.setText(q_text)
                 item_q.setForeground(QColor(q_color))
-                item_q.setToolTip(f"简介真实: {'是' if synopsis_valid else '否(已剔除假简介)'}\n开篇爽点: {'有' if payoff else '无(未亮出底牌)'}\n把握度: {conf}")
+                item_q.setToolTip(f"简介有效: {'是' if synopsis_valid else '否(已剔除假简介)'}\n开篇危机与底牌: {'已亮出' if payoff else '未亮出(极度慢热)'}\n把握度: {conf}")
 
             # 6: 赛道
             t_str = f"{track.get('gender_track', '')} · {track.get('core_sub_genre', '')}"
@@ -815,14 +823,16 @@ class NovelSummaryPage(BasePage):
             item_lev.setToolTip(f"破局底牌分类: {lev_cat}\n底牌运作规则:\n{lev_rule}\n\n开局弱势: {prot.get('surface_status', '')}\n真实身份: {prot.get('hidden_or_awakened_identity', '')}")
             self.table.setItem(idx, 7, item_lev)
 
-            # 8: 反杀
-            c_payoff = conflict.get("first_counterattack_payoff", "")
+            # 8: 反杀/破局
+            c_payoff = conflict.get("opening_breakthrough_action") or conflict.get("first_counterattack_payoff", "")
+            c_trend = conflict.get("subsequent_payoff_trend", "")
             item_payoff = QTableWidgetItem(c_payoff)
             item_payoff.setToolTip(
-                f"首个反杀爽点:\n{c_payoff}\n\n"
+                f"开篇破局动作:\n{c_payoff}\n\n"
+                f"后续打脸走向:\n{c_trend}\n\n"
                 f"迫害者关系: {conflict.get('antagonist_relationship', '')}\n"
-                f"导火索事件: {conflict.get('inciting_incident', '')}\n"
-                f"反派拉仇恨恶行: {conflict.get('extreme_aggro_behavior', '')}"
+                f"导火索危机: {conflict.get('inciting_incident', '')}\n"
+                f"反派拉仇恨言行: {conflict.get('extreme_aggro_behavior', '')}"
             )
             self.table.setItem(idx, 8, item_payoff)
 
@@ -911,7 +921,7 @@ class NovelSummaryPage(BasePage):
         if st == "SLOW_BURN_DISCARDED":
             advice = (
                 "\n\n💡 质检淘汰原因：\n"
-                "该小说前 6 章未亮出破局底牌或无核心反击爽点（has_payoff_in_opening = False），"
+                "该小说前 6 章未亮出危机或破局底牌（has_hook_or_leverage_in_opening = False，极度慢热文），"
                 "不符合短剧第一集快节奏高密度叙事要求，已被代码自动过滤洗掉，不予入库。"
             )
         elif st == "LOW_CONFIDENCE_DISCARDED":

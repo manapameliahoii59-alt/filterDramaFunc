@@ -69,10 +69,10 @@ class NovelDnaProfile(BaseModel):
     """
     title: str = Field(description="书名")
     author: str = Field(description="作者")
-    data_quality_check: Dict[str, Any] = Field(default_factory=dict, description="1. 数据质检与过滤 (is_synopsis_valid, has_payoff_in_opening, extraction_confidence)")
+    data_quality_check: Dict[str, Any] = Field(default_factory=dict, description="1. 数据质检与过滤 (is_synopsis_valid, has_hook_or_leverage_in_opening, extraction_confidence)")
     track_dna: Dict[str, Any] = Field(default_factory=dict, description="2. 赛道与世界观 (gender_track, worldview_setting, core_sub_genre)")
     protagonist_and_leverage_dna: Dict[str, Any] = Field(default_factory=dict, description="3. 主角人设与破局底牌已兼容男女频 (surface_status, hidden_or_awakened_identity, leverage_category, leverage_specific_mechanism)")
-    conflict_and_payoff_dna: Dict[str, Any] = Field(default_factory=dict, description="4. 开局冲突与反杀闭环 (antagonist_relationship, inciting_incident, extreme_aggro_behavior, first_counterattack_payoff)")
+    conflict_and_payoff_dna: Dict[str, Any] = Field(default_factory=dict, description="4. 开局冲突与爽点走向 (antagonist_relationship, inciting_incident, extreme_aggro_behavior, opening_breakthrough_action, subsequent_payoff_trend)")
     ep1_matching_anchors: Dict[str, Any] = Field(default_factory=dict, description="5. 第一集音画匹配锚点 (key_props_and_scenes, core_dialogue_themes, character_archetypes)")
     hierarchical_tropes: Dict[str, Any] = Field(default_factory=dict, description="6. 二级爆款标签树 (l1_macro_tropes, l2_micro_elements)")
 

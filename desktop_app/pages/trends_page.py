@@ -23,7 +23,7 @@ from desktop_app.common.constants import (
     SCRIPT_TRENDS,
     build_cmd,
 )
-from novel_trends.config import DEFAULT_CHAPTER_COUNT
+from novel_trends.config import DEFAULT_CHAPTER_COUNT, DEFAULT_TITLE_COUNT
 from desktop_app.common.shell import file_size_text, mtime_text, open_path, read_text_safe
 from desktop_app.components.base_page import BasePage
 from desktop_app.components.busy import guard_action
@@ -80,7 +80,7 @@ class TrendsPage(BasePage):
         super().__init__(
             "trendsPage",
             "小说风向标",
-            "直连起点 / 纵横 / 晋江 / 潇湘四大榜单，抓取前若干章标题、免费正文与简介入库"
+            "直连起点 / 纵横 / 晋江 / 潇湘四大榜单，抓取前 50 章标题（连载不足有多少抓多少）、免费正文与简介入库"
             "（当前不调用 AI 提炼维度）。",
             parent,
         )
@@ -154,6 +154,16 @@ class TrendsPage(BasePage):
         )
         layout.addWidget(self.content_limit)
 
+        layout.addWidget(BodyLabel("章节标题抓取", card))
+        self.title_limit = SpinBox(card)
+        self.title_limit.setRange(1, 200)
+        self.title_limit.setValue(DEFAULT_TITLE_COUNT)
+        self.title_limit.setSuffix(" 章")
+        self.title_limit.setToolTip(
+            "每本书抓取章节标题数量（默认 50 章；如果新书连载不满 50 章，有多少抓多少）"
+        )
+        layout.addWidget(self.title_limit)
+
         self.missing_btn = PushButton(FIF.SYNC, "补抓缺失章节", card)
         self.missing_btn.setToolTip("扫描数据库中没有章节内容的书，按上面的批量上限补抓")
         self.missing_btn.clicked.connect(guard_action(self.missing_btn, self._crawl_missing))
@@ -168,7 +178,9 @@ class TrendsPage(BasePage):
     def _crawl_missing(self) -> None:
         """扫描数据库缺失章节的书并按批量上限补抓（复用当前日志控制台）。"""
         cmd = build_cmd(
-            SCRIPT_CRAWL_MISSING, "--limit", str(self.content_limit.value())
+            SCRIPT_CRAWL_MISSING,
+            "--limit", str(self.content_limit.value()),
+            "--titles", str(self.title_limit.value()),
         )
         self.console.run(cmd)
 
@@ -220,4 +232,5 @@ class TrendsPage(BasePage):
             "--with-content",
             "--skip-ai",
             "--content-limit", str(self.content_limit.value()),
+            "--titles", str(self.title_limit.value()),
         )

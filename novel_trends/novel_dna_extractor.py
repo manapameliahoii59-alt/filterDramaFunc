@@ -62,7 +62,7 @@ USER_PROMPT_TEMPLATE = """请根据以下网络小说的书名与作者，推测
   "author": "{author}",
   "data_quality_check": {{
     "is_synopsis_valid": true,
-    "has_payoff_in_opening": true,
+    "has_hook_or_leverage_in_opening": true,
     "extraction_confidence": "高"
   }},
   "track_dna": {{
@@ -74,13 +74,14 @@ USER_PROMPT_TEMPLATE = """请根据以下网络小说的书名与作者，推测
     "surface_status": "开局（第1-2章）主角受迫害弱势状态",
     "hidden_or_awakened_identity": "隐藏/觉醒身份（如：唯一SSS级异能掌控者 / 跨国财阀唯一继承人 / 重生先知者）",
     "leverage_category": "破局底牌6大分类之一：系统面板类 / 重生先知类 / 异能空间类 / 隐藏马甲类 / 契约羁绊类 / 极致智商类",
-    "leverage_specific_mechanism": "底牌具体运作规则与触发机制"
+    "leverage_specific_mechanism": "底牌具体运作逻辑与触发机制"
   }},
   "conflict_and_payoff_dna": {{
     "antagonist_relationship": "迫害者关系（如：偏心父母与绿茶假千金 / 势利丈母娘与小舅子）",
     "inciting_incident": "第一集导火索事件（第1章发生的危机冲突）",
-    "extreme_aggro_behavior": "反派极度拉仇恨的具体恶行或道德绑架话术逻辑",
-    "first_counterattack_payoff": "前5~6章内主角完成的第一次实质性反击打脸爽点事件"
+    "extreme_aggro_behavior": "反派拉仇恨言行（反派极度拉仇恨的具体恶行或道德绑架话术逻辑）",
+    "opening_breakthrough_action": "开篇破局动作（前5~6章内主角完成的第一次实质性反击立威）",
+    "subsequent_payoff_trend": "后续打脸闭环走向（推演后续高潮与打脸闭环）"
   }},
   "ep1_matching_anchors": {{
     "key_props_and_scenes": [

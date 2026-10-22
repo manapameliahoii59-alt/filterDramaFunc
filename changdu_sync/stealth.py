@@ -83,7 +83,7 @@ STEALTH_INIT_SCRIPT = """
     };
   }
 
-  // 3. 补全常见插件数组，避免 Headless 模式下 plugins 长度为 0 的硬伤
+  // 3. 补全常见插件与 MIME 类型数组，严格匹配原生 PluginArray / MimeTypeArray 原型链（防范 shelldriver 检测）
   if (!navigator.plugins || navigator.plugins.length === 0) {
     const pluginList = [
       { name: 'PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
@@ -92,14 +92,57 @@ STEALTH_INIT_SCRIPT = """
       { name: 'Microsoft Edge PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
       { name: 'WebKit built-in PDF', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
     ];
+    pluginList.forEach(function(p) {
+      if (typeof Plugin !== 'undefined') {
+        try { Object.setPrototypeOf(p, Plugin.prototype); } catch (e) {}
+      }
+    });
+    const pArr = [...pluginList];
+    if (typeof PluginArray !== 'undefined') {
+      try { Object.setPrototypeOf(pArr, PluginArray.prototype); } catch (e) {}
+    }
+    pArr.item = function(i) { return this[i] || null; };
+    pArr.namedItem = function(name) {
+      for (let i = 0; i < this.length; i++) {
+        if (this[i] && this[i].name === name) return this[i];
+      }
+      return null;
+    };
+    pArr.refresh = function() {};
+
     Object.defineProperty(navigator, 'plugins', {
-      get: function() {
-        const arr = [...pluginList];
-        arr.item = function(i) { return arr[i] || null; };
-        arr.namedItem = function(name) { return arr.find(function(p) { return p.name === name; }) || null; };
-        arr.refresh = function() {};
-        return arr;
-      },
+      get: function() { return pArr; },
+      enumerable: true,
+      configurable: true,
+    });
+  }
+
+  if (!navigator.mimeTypes || navigator.mimeTypes.length === 0) {
+    const mimeList = [
+      { type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format' },
+      { type: 'text/pdf', suffixes: 'pdf', description: 'Portable Document Format' },
+    ];
+    mimeList.forEach(function(m) {
+      if (typeof MimeType !== 'undefined') {
+        try { Object.setPrototypeOf(m, MimeType.prototype); } catch (e) {}
+      }
+    });
+    const mArr = [...mimeList];
+    if (typeof MimeTypeArray !== 'undefined') {
+      try { Object.setPrototypeOf(mArr, MimeTypeArray.prototype); } catch (e) {}
+    }
+    mArr.item = function(i) { return this[i] || null; };
+    mArr.namedItem = function(name) {
+      for (let i = 0; i < this.length; i++) {
+        if (this[i] && this[i].type === name) return this[i];
+      }
+      return null;
+    };
+
+    Object.defineProperty(navigator, 'mimeTypes', {
+      get: function() { return mArr; },
+      enumerable: true,
+      configurable: true,
     });
   }
 

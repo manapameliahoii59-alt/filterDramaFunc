@@ -64,14 +64,14 @@ def _read_kb_stats() -> dict:
 
 
 def _read_missing_stats() -> dict:
-    """后台线程：统计数据库中还没有章节记录的书籍数量。"""
+    """后台线程：统计数据库中还没有完整章节记录（正文不足或标题未达标）的书籍数量。"""
     from novel_trends.pg_storage import PgNovelStorage
 
     pg = PgNovelStorage()
     pg.init_content_tables()
     return {
-        "total": pg.count_missing_chapters(DEFAULT_CHAPTER_COUNT),
-        "by_platform": pg.count_missing_chapters_by_platform(DEFAULT_CHAPTER_COUNT),
+        "total": pg.count_missing_chapters(DEFAULT_CHAPTER_COUNT, DEFAULT_TITLE_COUNT),
+        "by_platform": pg.count_missing_chapters_by_platform(DEFAULT_CHAPTER_COUNT, DEFAULT_TITLE_COUNT),
     }
 
 
@@ -165,9 +165,14 @@ class TrendsPage(BasePage):
         layout.addWidget(self.title_limit)
 
         self.missing_btn = PushButton(FIF.SYNC, "补抓缺失章节", card)
-        self.missing_btn.setToolTip("扫描数据库中没有章节内容的书，按上面的批量上限补抓")
+        self.missing_btn.setToolTip("扫描数据库中缺失正文或标题的书，按上面的批量上限补抓")
         self.missing_btn.clicked.connect(guard_action(self.missing_btn, self._crawl_missing))
         layout.addWidget(self.missing_btn)
+
+        self.titles_only_btn = PushButton(FIF.UPDATE, "仅补齐目录标题", card)
+        self.titles_only_btn.setToolTip("快速扫描未满50章标题的书籍，只抓取目录标题（跳过正文，速度极快）")
+        self.titles_only_btn.clicked.connect(guard_action(self.titles_only_btn, self._crawl_titles_only))
+        layout.addWidget(self.titles_only_btn)
         layout.addStretch(1)
 
         tip = CaptionLabel("主按钮只更新榜单+抓内容（不调用 AI）；0 = 全部", card)
@@ -181,6 +186,16 @@ class TrendsPage(BasePage):
             SCRIPT_CRAWL_MISSING,
             "--limit", str(self.content_limit.value()),
             "--titles", str(self.title_limit.value()),
+        )
+        self.console.run(cmd)
+
+    def _crawl_titles_only(self) -> None:
+        """快速补全数据库中章节标题不满 50 章的书籍目录（跳过正文下载）。"""
+        cmd = build_cmd(
+            SCRIPT_CRAWL_MISSING,
+            "--limit", str(self.content_limit.value()),
+            "--titles", str(self.title_limit.value()),
+            "--titles-only",
         )
         self.console.run(cmd)
 

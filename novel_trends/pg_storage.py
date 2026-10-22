@@ -889,9 +889,19 @@ class PgNovelStorage:
         except Exception:
             return 0
 
-    def count_missing_chapters(self, target_chapters: int = 10) -> int:
-        """统计仍需补抓章节的书：正文数 < 目标，且未被判定为「已抓完」。"""
-        sql = """
+    def count_missing_chapters(self, target_chapters: int = 10, target_titles: int = 0, titles_only: bool = False) -> int:
+        """统计仍需补抓章节或目录标题的书：正文数 < 目标且未判定已抓完，或总章节数 < 目标标题数。"""
+        if titles_only:
+            cond = "COALESCE(a.total_chapters, 0) < %s"
+            params = (int(target_titles),)
+        elif target_titles > 0:
+            cond = "(COALESCE(a.content_chapters, 0) < %s AND COALESCE(s.exhausted, FALSE) = FALSE) OR (COALESCE(a.total_chapters, 0) < %s)"
+            params = (int(target_chapters), int(target_titles))
+        else:
+            cond = "COALESCE(a.content_chapters, 0) < %s AND COALESCE(s.exhausted, FALSE) = FALSE"
+            params = (int(target_chapters),)
+
+        sql = f"""
         WITH books AS (
             SELECT DISTINCT platform, book_id
             FROM crawled_ranking_books
@@ -899,6 +909,7 @@ class PgNovelStorage:
         ),
         agg AS (
             SELECT platform, book_id,
+                   COUNT(*) AS total_chapters,
                    COUNT(*) FILTER (WHERE content <> '') AS content_chapters
             FROM novel_chapters
             GROUP BY platform, book_id
@@ -907,20 +918,29 @@ class PgNovelStorage:
         FROM books b
         LEFT JOIN agg a ON a.platform = b.platform AND a.book_id = b.book_id
         LEFT JOIN novel_content_status s ON s.platform = b.platform AND s.book_id = b.book_id
-        WHERE COALESCE(a.content_chapters, 0) < %s
-          AND COALESCE(s.exhausted, FALSE) = FALSE;
+        WHERE {cond};
         """
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute(sql, (int(target_chapters),))
+                    cur.execute(sql, params)
                     return int(cur.fetchone()[0])
         except Exception:
             return 0
 
-    def count_missing_chapters_by_platform(self, target_chapters: int = 10) -> Dict[str, int]:
-        """按平台统计仍需补抓章节的书。"""
-        sql = """
+    def count_missing_chapters_by_platform(self, target_chapters: int = 10, target_titles: int = 0, titles_only: bool = False) -> Dict[str, int]:
+        """按平台统计仍需补抓章节或目录标题的书。"""
+        if titles_only:
+            cond = "COALESCE(a.total_chapters, 0) < %s"
+            params = (int(target_titles),)
+        elif target_titles > 0:
+            cond = "(COALESCE(a.content_chapters, 0) < %s AND COALESCE(s.exhausted, FALSE) = FALSE) OR (COALESCE(a.total_chapters, 0) < %s)"
+            params = (int(target_chapters), int(target_titles))
+        else:
+            cond = "COALESCE(a.content_chapters, 0) < %s AND COALESCE(s.exhausted, FALSE) = FALSE"
+            params = (int(target_chapters),)
+
+        sql = f"""
         WITH books AS (
             SELECT DISTINCT platform, book_id
             FROM crawled_ranking_books
@@ -928,6 +948,7 @@ class PgNovelStorage:
         ),
         agg AS (
             SELECT platform, book_id,
+                   COUNT(*) AS total_chapters,
                    COUNT(*) FILTER (WHERE content <> '') AS content_chapters
             FROM novel_chapters
             GROUP BY platform, book_id
@@ -936,15 +957,14 @@ class PgNovelStorage:
         FROM books b
         LEFT JOIN agg a ON a.platform = b.platform AND a.book_id = b.book_id
         LEFT JOIN novel_content_status s ON s.platform = b.platform AND s.book_id = b.book_id
-        WHERE COALESCE(a.content_chapters, 0) < %s
-          AND COALESCE(s.exhausted, FALSE) = FALSE
+        WHERE {cond}
         GROUP BY b.platform ORDER BY b.platform;
         """
         result: Dict[str, int] = {}
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute(sql, (int(target_chapters),))
+                    cur.execute(sql, params)
                     for platform, count in cur.fetchall():
                         result[platform] = int(count)
         except Exception:

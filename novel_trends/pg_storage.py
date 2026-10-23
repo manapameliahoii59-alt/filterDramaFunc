@@ -360,8 +360,13 @@ class PgNovelStorage:
         subsequent_trend = conflict.get("subsequent_payoff_trend", "")
         first_payoff = opening_action
         dq = profile.get("data_quality_check", {})
+        hook_type = str(dq.get("hook_archetype", "")).strip().upper()
         has_hook = dq.get("has_hook_or_leverage_in_opening")
-        if has_hook is None:
+        if "EMOTIONAL_TENSION" in hook_type or "ACTION_SPECTACLE" in hook_type:
+            has_hook = True
+        elif "ATMOSPHERE_SLOW_BURN" in hook_type:
+            has_hook = False
+        elif has_hook is None:
             has_hook = dq.get("has_payoff_in_opening", True)
         has_hook = bool(has_hook)
         confidence = str(dq.get("extraction_confidence", "高")).strip()

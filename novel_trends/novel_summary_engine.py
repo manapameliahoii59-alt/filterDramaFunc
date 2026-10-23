@@ -46,12 +46,17 @@ SYSTEM_PROMPT = """你是一个工业级的“网文与AI短剧/漫剧爆款基�
 
 ### 6 大黄金维度提取清单与规范依据（必须严格遵守）：
 
-1. 【数据质检与过滤 data_quality_check】
+1. 【数据质检与过滤 data_quality_check】(双轨制钩子与慢热排雷)
    - 提取来源依据：对比简介与前 6 章正文。
-   - 在筛选“第一集原素材”时的实际用途：代码级自动过滤脏数据。若 has_hook_or_leverage_in_opening 为 false（极度慢热文）或提取把握度为 低，直接丢弃不入库。
+   - 在筛选“第一集原素材”时的实际用途：代码级自动过滤脏数据与极度慢热废书。
    - 字段规范：
      * is_synopsis_valid (布尔值): 简介是否有效。若简介是“简介无力请看正文”、文艺腔废话或与正文实际剧情严重割裂不符，填 false 并彻底无视简介；否则填 true。
-     * has_hook_or_leverage_in_opening (布尔值): 前 6 章是否已亮出危机与底牌。若前 6 章连外挂/底牌都没亮出来，或者节奏拖沓毫无危机与爽点推进（极度慢热文），填 false；若已亮出底牌或完成反打脸立威，填 true。
+     * hook_archetype (字符串): 开局核心钩子形态分类（双轨制识别），必须严格归入以下 3 类之一：
+       ① "ACTION_SPECTACLE" (显性事件/外挂爽感型)：开局前 6 章发生明确的断亲退婚、系统觉醒、空间囤货、当众打脸、绝境反击或专业技能碾压立威。适合 AI 漫剧直拍。
+       ② "EMOTIONAL_TENSION" (情绪暗涌/高张力拉扯型)：开局前 6 章具备高浓度的人际张力、疯批失控、熟龄情商博弈、身份错位伪装、强制爱或宿命拉扯（如晋江/女频高口碑言情）。适合高阶言情/前置剪辑。
+       ③ "ATMOSPHERE_SLOW_BURN" (纯生活流/慢热沉浸型)：通篇无核心矛盾主线、平淡日常记账买菜、缺乏戏剧性对抗与情感暗流，属于纯慢热生活流。
+     * hook_archetype_desc (字符串): 简要说明开局具备的具体钩子形态与戏剧张力所在（30字以内）。
+     * has_hook_or_leverage_in_opening (布尔值): 前 6 章是否已亮出危机或戏剧张力钩子。若 hook_archetype 属于 ACTION_SPECTACLE 或 EMOTIONAL_TENSION，填 true；若属于 ATMOSPHERE_SLOW_BURN，填 false。
      * extraction_confidence (字符串): 提取把握度，仅限填 "高" / "中" / "低"。若正文严重缺失、篇幅过短或剧情混乱难以断定，填 "低"。
 
 2. 【赛道与世界观 track_dna】
@@ -110,6 +115,8 @@ SYSTEM_PROMPT = """你是一个工业级的“网文与AI短剧/漫剧爆款基�
   "author": "作者",
   "data_quality_check": {
     "is_synopsis_valid": true,
+    "hook_archetype": "ACTION_SPECTACLE / EMOTIONAL_TENSION / ATMOSPHERE_SLOW_BURN",
+    "hook_archetype_desc": "简述开局核心钩子形态与张力所在",
     "has_hook_or_leverage_in_opening": true,
     "extraction_confidence": "高"
   },
@@ -167,10 +174,13 @@ def build_user_prompt(
     chapter_titles: 包含前 50 章标题列表（新书连载不满 50 章有多少取多少）
     chapter_contents: 包含 (章节标题, 章节正文) 的元组列表，一般取前 5~6 章
     """
-    titles_block = "\n".join(
-        f"第{idx+1}章 {t}" if not t.startswith("第") else t
-        for idx, t in enumerate(chapter_titles[:50])
-    )
+    cleaned_titles = []
+    for idx, t in enumerate(chapter_titles[:50], start=1):
+        t_clean = (t or "").strip()
+        if not t_clean:
+            continue
+        cleaned_titles.append(t_clean if t_clean.startswith("第") else f"第{idx}章 {t_clean}")
+    titles_block = "\n".join(cleaned_titles)
     if not titles_block.strip():
         titles_block = "（暂缺章节目录）"
 
@@ -307,7 +317,11 @@ def get_candidate_books_stats_from_db(platform: Optional[str] = None) -> Dict[st
         SELECT c.platform, c.book_id, count(d.id) as d_count
         FROM novel_chapters c
         LEFT JOIN novel_intros i ON i.platform = c.platform AND i.book_id = c.book_id
-        LEFT JOIN crawled_ranking_books b ON b.platform = c.platform AND b.book_id = c.book_id
+        LEFT JOIN (
+            SELECT DISTINCT ON (platform, book_id) platform, book_id, title, author
+            FROM crawled_ranking_books
+            ORDER BY platform, book_id, id DESC
+        ) b ON b.platform = c.platform AND b.book_id = c.book_id
         LEFT JOIN novel_dna_records d ON d.book_key = (COALESCE(NULLIF(i.title, ''), b.title, '') || '_' || COALESCE(NULLIF(i.author, ''), b.author, ''))
         GROUP BY c.platform, c.book_id
         HAVING count(c.id) FILTER (WHERE length(COALESCE(c.content, '')) >= 50) >= 5
@@ -387,7 +401,11 @@ def fetch_candidate_books_from_db(
            d.dna_profile
     FROM novel_chapters c
     LEFT JOIN novel_intros i ON i.platform = c.platform AND i.book_id = c.book_id
-    LEFT JOIN crawled_ranking_books b ON b.platform = c.platform AND b.book_id = c.book_id
+    LEFT JOIN (
+        SELECT DISTINCT ON (platform, book_id) platform, book_id, title, author, category, intro
+        FROM crawled_ranking_books
+        ORDER BY platform, book_id, id DESC
+    ) b ON b.platform = c.platform AND b.book_id = c.book_id
     LEFT JOIN novel_dna_records d ON d.book_key = (COALESCE(NULLIF(i.title, ''), b.title, '') || '_' || COALESCE(NULLIF(i.author, ''), b.author, ''))
     {where_sql}
     GROUP BY c.platform, c.book_id, i.title, b.title, i.author, b.author, b.category, i.intro, b.intro, d.id, d.dna_profile
@@ -489,19 +507,28 @@ def extract_dna_for_book(
 
     dna_result = payload
     dq = dna_result.get("data_quality_check", {})
+    hook_type = str(dq.get("hook_archetype", "")).strip().upper()
     has_hook = dq.get("has_hook_or_leverage_in_opening")
-    if has_hook is None:
+
+    # 双轨制智能校准：显性事件爽感型 (ACTION_SPECTACLE) 与 情绪暗涌张力型 (EMOTIONAL_TENSION) 均判定为具备有效钩子
+    if "EMOTIONAL_TENSION" in hook_type or "ACTION_SPECTACLE" in hook_type:
+        has_hook = True
+    elif "ATMOSPHERE_SLOW_BURN" in hook_type:
+        has_hook = False
+    elif has_hook is None:
         has_hook = dq.get("has_payoff_in_opening", True)
+
     confidence = str(dq.get("extraction_confidence", "高")).strip()
     is_low_conf = ("低" in confidence or confidence.lower() == "low")
 
-    # 数据质检与过滤：若 has_hook_or_leverage_in_opening 为 false（极度慢热文）或提取把握度为 低，直接丢弃不入库
+    # 数据质检与过滤：若 has_hook 为 false（极度慢热文）或提取把握度为 低，直接丢弃不入库
     if discard_slow_burn:
         if not has_hook:
+            hook_desc = dq.get("hook_archetype_desc") or "前6章属于纯生活流慢热，无有效危机或情感暗涌"
             return {
                 "success": True,
                 "status": "SLOW_BURN_DISCARDED",
-                "message": "极度慢热文（前6章未亮出危机与破局底牌），代码直接丢弃不入库",
+                "message": f"极度慢热文（{hook_desc}），代码直接丢弃不入库",
                 "elapsed": elapsed,
                 "dna": dna_result,
                 "saved_to_db": False,
@@ -636,6 +663,18 @@ def load_book_context_from_db(platform: str, book_id: str) -> Dict[str, Any]:
                 rows = cur.fetchall()
                 for r in rows:
                     ch_idx, ch_title, ch_content = r[0], r[1] or "", r[2] or ""
+                    # 动态智能兜底：若标题为空或仅为纯数字占位，尝试从正文首行提取真实章节标题
+                    if (not ch_title or ch_title.strip() in ("", f"第{ch_idx}章", f"第{ch_idx}章 第 {ch_idx} 章")) and ch_content:
+                        first_line = ch_content.strip().split("\n")[0].strip()
+                        m_t = re.match(r"^(\d+)[、.]\s*(.+)$", first_line)
+                        if m_t:
+                            c_num = m_t.group(1)
+                            t_part = m_t.group(2).strip()
+                            t_part = re.sub(r"[.…]{2,}$", "", t_part).strip()
+                            t_part = re.sub(r"^第\s*\d+\s*章\s*", "", t_part).strip()
+                            if len(t_part) > 40:
+                                t_part = t_part[:40].strip()
+                            ch_title = f"第{c_num}章 {t_part}".strip()
                     context["chapter_titles"].append(ch_title)
                     if ch_idx <= 6 and ch_content:
                         context["chapter_contents"].append((ch_title, ch_content))
@@ -715,8 +754,13 @@ def save_dna_to_postgres(
     subsequent_payoff = conflict.get("subsequent_payoff_trend", "")
     first_payoff = opening_action
     dq = dna_result.get("data_quality_check", {})
+    hook_type = str(dq.get("hook_archetype", "")).strip().upper()
     has_hook = dq.get("has_hook_or_leverage_in_opening")
-    if has_hook is None:
+    if "EMOTIONAL_TENSION" in hook_type or "ACTION_SPECTACLE" in hook_type:
+        has_hook = True
+    elif "ATMOSPHERE_SLOW_BURN" in hook_type:
+        has_hook = False
+    elif has_hook is None:
         has_hook = dq.get("has_payoff_in_opening", True)
     has_hook = bool(has_hook)
     extraction_confidence = str(dq.get("extraction_confidence", "高")).strip()

@@ -74,10 +74,10 @@ BATCH_COLS = (
     ("书名", 160),
     ("作者", 100),
     ("章节数", 65),
-    ("数据质检/爽点", 130),
+    ("钩子形态/改编分级", 145),
     ("赛道与细分流派", 170),
-    ("破局底牌分类", 150),
-    ("首个反杀爽点", 220),
+    ("破局底牌/抓手", 150),
+    ("开篇破局动作", 220),
     ("入库状态", 95),
     ("耗时", 60),
 )
@@ -580,20 +580,40 @@ class NovelSummaryPage(BasePage):
                 )
                 conflict = dna.get("conflict_and_payoff_dna", {})
 
-                # 5: 数据质检
-                if not payoff:
-                    q_text = "[淘汰] 未亮危机/底牌"
+                # 5: 数据质检（双轨制钩子形态）
+                hook_type = str(dq.get("hook_archetype", "")).strip().upper()
+                hook_desc = dq.get("hook_archetype_desc", "")
+                if "EMOTIONAL_TENSION" in hook_type:
+                    payoff = True
+                    q_text = "[张力拉扯] 高阶女频"
+                    q_color = "#8E24AA"
+                    hook_tip_label = "情绪暗涌/高张力拉扯 (适合女频/前置剪辑)"
+                elif "ACTION_SPECTACLE" in hook_type:
+                    payoff = True
+                    q_text = "[显性爽感] 纯AI漫剧"
+                    q_color = "#1D9E75"
+                    hook_tip_label = "显性事件/外挂爽感 (适合AI漫剧直拍)"
+                elif not payoff or "ATMOSPHERE_SLOW_BURN" in hook_type:
+                    q_text = "[淘汰] 慢热废书"
                     q_color = "#D32F2F"
+                    hook_tip_label = "纯生活流慢热 (无核心对抗与张力)"
                 elif is_low_conf:
                     q_text = f"[淘汰] 把握度低({conf})"
                     q_color = "#E65100"
+                    hook_tip_label = "提取把握度低"
                 else:
                     q_text = f"[合格] {conf}把握度"
-                    q_color = "#2E7D32"
+                    q_color = "#1D9E75"
+                    hook_tip_label = "开篇已亮出危机与底牌"
 
                 item_q = QTableWidgetItem(q_text)
                 item_q.setForeground(QColor(q_color))
-                item_q.setToolTip(f"简介有效: {'是' if synopsis_valid else '否(已剔除假简介)'}\n开篇危机与底牌: {'已亮出' if payoff else '未亮出(极度慢热)'}\n把握度: {conf}")
+                item_q.setToolTip(
+                    f"开篇钩子形态: {hook_tip_label}\n"
+                    f"钩子剧情描述: {hook_desc or ('已亮出危机与底牌' if payoff else '无有效危机')}\n"
+                    f"简介真实有效: {'是' if synopsis_valid else '否(已剔除假简介)'}\n"
+                    f"大模型把握度: {conf}"
+                )
                 self.table.setItem(row, 5, item_q)
 
                 # 6: 赛道
@@ -602,14 +622,14 @@ class NovelSummaryPage(BasePage):
                 item_track.setToolTip(f"世界观基底: {track.get('worldview_setting', '')}\n核心细分流派: {track.get('core_sub_genre', '')}")
                 self.table.setItem(row, 6, item_track)
 
-                # 7: 破局底牌分类
+                # 7: 破局底牌/抓手
                 lev_cat = prot.get("leverage_category") or prot.get("cheat_mechanism_type", "")
                 lev_rule = prot.get("leverage_specific_mechanism") or prot.get("cheat_specific_rule", "")
                 item_lev = QTableWidgetItem(lev_cat)
-                item_lev.setToolTip(f"破局底牌分类: {lev_cat}\n底牌运作规则:\n{lev_rule}\n\n开局弱势: {prot.get('surface_status', '')}\n真实身份: {prot.get('hidden_or_awakened_identity', '')}")
+                item_lev.setToolTip(f"破局底牌/抓手: {lev_cat}\n底牌运作规则:\n{lev_rule}\n\n开局弱势: {prot.get('surface_status', '')}\n真实身份: {prot.get('hidden_or_awakened_identity', '')}")
                 self.table.setItem(row, 7, item_lev)
 
-                # 8: 反杀/破局
+                # 8: 开篇破局动作
                 c_payoff = conflict.get("opening_breakthrough_action") or conflict.get("first_counterattack_payoff", "")
                 c_trend = conflict.get("subsequent_payoff_trend", "")
                 item_payoff = QTableWidgetItem(c_payoff)
@@ -794,21 +814,42 @@ class NovelSummaryPage(BasePage):
             )
             conflict = dna.get("conflict_and_payoff_dna", {})
 
-            # 5: 数据质检
+            # 5: 数据质检（双轨制钩子形态）
             item_q = self.table.item(idx, 5)
             if item_q:
-                if not payoff:
-                    q_text = "[淘汰] 未亮危机/底牌"
+                hook_type = str(dq.get("hook_archetype", "")).strip().upper()
+                hook_desc = dq.get("hook_archetype_desc", "")
+                if "EMOTIONAL_TENSION" in hook_type:
+                    payoff = True
+                    q_text = "[张力拉扯] 高阶女频"
+                    q_color = "#8E24AA"
+                    hook_tip_label = "情绪暗涌/高张力拉扯 (适合女频/前置剪辑)"
+                elif "ACTION_SPECTACLE" in hook_type:
+                    payoff = True
+                    q_text = "[显性爽感] 纯AI漫剧"
+                    q_color = "#1D9E75"
+                    hook_tip_label = "显性事件/外挂爽感 (适合AI漫剧直拍)"
+                elif not payoff or "ATMOSPHERE_SLOW_BURN" in hook_type:
+                    q_text = "[淘汰] 慢热废书"
                     q_color = "#D32F2F"
+                    hook_tip_label = "纯生活流慢热 (无核心对抗与张力)"
                 elif is_low_conf:
                     q_text = f"[淘汰] 把握度低({conf})"
                     q_color = "#E65100"
+                    hook_tip_label = "提取把握度低"
                 else:
                     q_text = f"[合格] {conf}把握度"
-                    q_color = "#2E7D32"
+                    q_color = "#1D9E75"
+                    hook_tip_label = "开篇已亮出危机与底牌"
+
                 item_q.setText(q_text)
                 item_q.setForeground(QColor(q_color))
-                item_q.setToolTip(f"简介有效: {'是' if synopsis_valid else '否(已剔除假简介)'}\n开篇危机与底牌: {'已亮出' if payoff else '未亮出(极度慢热)'}\n把握度: {conf}")
+                item_q.setToolTip(
+                    f"开篇钩子形态: {hook_tip_label}\n"
+                    f"钩子剧情描述: {hook_desc or ('已亮出危机与底牌' if payoff else '无有效危机')}\n"
+                    f"简介真实有效: {'是' if synopsis_valid else '否(已剔除假简介)'}\n"
+                    f"大模型把握度: {conf}"
+                )
 
             # 6: 赛道
             t_str = f"{track.get('gender_track', '')} · {track.get('core_sub_genre', '')}"
@@ -816,14 +857,14 @@ class NovelSummaryPage(BasePage):
             item_track.setToolTip(f"世界观基底: {track.get('worldview_setting', '')}\n核心细分流派: {track.get('core_sub_genre', '')}")
             self.table.setItem(idx, 6, item_track)
 
-            # 7: 破局底牌分类
+            # 7: 破局底牌/抓手
             lev_cat = prot.get("leverage_category") or prot.get("cheat_mechanism_type", "")
             lev_rule = prot.get("leverage_specific_mechanism") or prot.get("cheat_specific_rule", "")
             item_lev = QTableWidgetItem(lev_cat)
-            item_lev.setToolTip(f"破局底牌分类: {lev_cat}\n底牌运作规则:\n{lev_rule}\n\n开局弱势: {prot.get('surface_status', '')}\n真实身份: {prot.get('hidden_or_awakened_identity', '')}")
+            item_lev.setToolTip(f"破局底牌/抓手: {lev_cat}\n底牌运作规则:\n{lev_rule}\n\n开局弱势: {prot.get('surface_status', '')}\n真实身份: {prot.get('hidden_or_awakened_identity', '')}")
             self.table.setItem(idx, 7, item_lev)
 
-            # 8: 反杀/破局
+            # 8: 开篇破局动作
             c_payoff = conflict.get("opening_breakthrough_action") or conflict.get("first_counterattack_payoff", "")
             c_trend = conflict.get("subsequent_payoff_trend", "")
             item_payoff = QTableWidgetItem(c_payoff)
@@ -871,7 +912,7 @@ class NovelSummaryPage(BasePage):
                 item_q.setForeground(QColor("#D32F2F"))
                 item_q.setToolTip(f"失败类型: {st}\n失败原因: {err_msg}\n（双击该行或点击上方「查看失败原因」查看具体排查指引）")
 
-            # 8: 反杀/详情列展示简要错误原因
+            # 8: 开篇破局动作/详情列展示简要错误原因
             item_conflict = self.table.item(idx, 8)
             if item_conflict:
                 item_conflict.setText(f"原因: {err_msg[:24]}...")

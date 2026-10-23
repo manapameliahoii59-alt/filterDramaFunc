@@ -573,10 +573,16 @@ class ContentCrawler:
                 tds = re.findall(r'<td[^>]*>(.*?)</td>', row, re.S)
                 if len(tds) >= 4:
                     c_idx = _clean_text(tds[0])
-                    c_title = _clean_text(tds[1]).replace("[VIP]", "").strip()
+                    c_name = _clean_text(tds[1]).replace("[VIP]", "").strip()
+                    c_summary = _clean_text(tds[2]).strip()
                     c_words = _clean_text(tds[3]).strip()
                     is_free = not ("[VIP]" in row or "vip" in row.lower())
-                    title = f"第{c_idx}章 {c_title}" if c_title else f"第{c_idx}章"
+
+                    # 晋江特色：td[1] 通常是 "第 1 章" 等占位，真实的章名/看点在 td[2] 内容提要中
+                    c_name_clean = re.sub(r"^第\s*\d+\s*章\s*", "", c_name).strip()
+                    title_parts = [p for p in [c_name_clean, c_summary] if p]
+                    combined = " ".join(title_parts) if title_parts else c_name
+                    title = f"第{c_idx}章 {combined}".strip() if combined else f"第{c_idx}章"
                     words = int(c_words) if c_words.isdigit() else 0
                     result.append({
                         "chapter_id": cid,
@@ -612,6 +618,17 @@ class ContentCrawler:
             content = self._largest_text_from_html(html)
             tm = re.search(r"<h[12][^>]*>(.*?)</h[12]>", html, re.S)
             title = _compact(_clean_text(tm.group(1))) if tm else ""
+            if not title and content:
+                first_line = content.strip().split("\n")[0].strip()
+                m_title = re.match(r"^(\d+)[、.]\s*(.+)$", first_line)
+                if m_title:
+                    c_num = m_title.group(1)
+                    t_part = m_title.group(2).strip()
+                    t_part = re.sub(r"[.…]{2,}$", "", t_part).strip()
+                    t_part = re.sub(r"^第\s*\d+\s*章\s*", "", t_part).strip()
+                    if len(t_part) > 40:
+                        t_part = t_part[:40].strip()
+                    title = f"第{c_num}章 {t_part}".strip()
             if len(content) < 300:
                 return None
             return content, title

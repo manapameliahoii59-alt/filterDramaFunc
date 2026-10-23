@@ -185,6 +185,9 @@ class ContentCrawler:
                 html = self.qidian.fetch_url(
                     f"https://m.qidian.com/book/{bid}/", is_mobile=True, encoding="utf-8"
                 )
+                if not html or self.qidian.is_waf_challenge(html):
+                    print(f"[ContentCrawler] [风控拦截] 起点简介命中 WAF 挑战: bid={bid}")
+                    return None
                 m = re.search(
                     r'<script id="vite-plugin-ssr_pageContext" type="application/json">(.*?)</script>',
                     html, re.S,
@@ -208,6 +211,9 @@ class ContentCrawler:
                 html = self.xiaoxiang.fetch_url(
                     f"https://www.xxsy.net/book/{bid}", is_mobile=False, encoding="utf-8"
                 )
+                if not html or self.xiaoxiang.is_waf_challenge(html):
+                    print(f"[ContentCrawler] [风控拦截] 潇湘简介命中 WAF 挑战: bid={bid}")
+                    return None
                 m = re.search(
                     r'<script id="vite-plugin-ssr_pageContext" type="application/json">(.*?)</script>',
                     html, re.S,
@@ -268,14 +274,19 @@ class ContentCrawler:
             )
         return stats
 
-    def _result(self, chapters: List[NovelChapter], fetched: int, catalog_len: int) -> Dict[str, Any]:
+    def _result(
+        self, chapters: List[NovelChapter], fetched: int, catalog_len: int, exhausted: Optional[bool] = None
+    ) -> Dict[str, Any]:
         """组装单本抓取结果，并记录是否已抓完所有可用免费章节。"""
+        if exhausted is None:
+            # 只有目录有效且非空时，抓取数未达标才视为耗尽（免费章节少于目标）；
+            # 目录获取失败（catalog_len==0）绝不标记为 exhausted，防止误杀导致不再重试。
+            exhausted = (catalog_len > 0) and (fetched < self.max_chapters)
         return {
             "chapters": chapters[: max(self.max_titles, self.max_chapters)],
             "content_count": fetched,
             "title_count": catalog_len,
-            # fetched 未达到目标，说明目录已遍历完，剩余章节是 VIP/不存在
-            "exhausted": fetched < self.max_chapters,
+            "exhausted": bool(exhausted),
         }
 
     # ------------------------------------------------------------- 起点
@@ -283,9 +294,13 @@ class ContentCrawler:
         bid = (book.book_id or "").strip()
         chapters: List[NovelChapter] = []
         if not bid:
-            return self._result(chapters, 0, 0)
+            return self._result(chapters, 0, 0, exhausted=False)
 
         catalog = self._qidian_catalog(bid)
+        if not catalog:
+            # 目录获取失败（可能因 WAF 挑战、网络波动或临时限流），绝不标记为 exhausted，留待下次重试
+            return self._result(chapters, 0, 0, exhausted=False)
+
         for i, item in enumerate(catalog[: self.max_titles], 1):
             chapters.append(NovelChapter(
                 platform=book.platform, book_id=bid, chapter_index=i,
@@ -295,31 +310,45 @@ class ContentCrawler:
             ))
 
         fetched = 0
+        hit_vip_or_completed = False
+        consecutive_errors = 0
         for i, item in enumerate(catalog, 1):
             if fetched >= self.max_chapters:
+                hit_vip_or_completed = True
                 break
             cid = str(item.get("id", ""))
             if not cid:
                 continue
             data = self._qidian_chapter(bid, cid)
             if not data:
+                consecutive_errors += 1
+                if consecutive_errors >= 3:
+                    print(f"[ContentCrawler] 起点《{book.title}》({bid}) 连续 3 次获取章节失败 (可能遭遇风控或限流)，保护性中断")
+                    break
                 continue
+            consecutive_errors = 0
             content, name, words, free = data
             self._merge_chapter(chapters, book.platform, bid, i, cid, name, content, words, free)
             if not free:
-                # 免费章节是有序前缀，遇到 VIP 即可停止，避免无谓请求
+                # 免费章节是有序前缀，遇到 VIP 即可停止，这是正常的 exhausted
+                hit_vip_or_completed = True
                 break
             if content:
                 fetched += 1
             self._sleep()
 
-        return self._result(chapters, fetched, len(catalog))
+        # 仅当命中 VIP 锁定或抓满额度，且无风控连错中断时才判定为 exhausted
+        is_exhausted = hit_vip_or_completed or (consecutive_errors == 0 and fetched > 0)
+        return self._result(chapters, fetched, len(catalog), exhausted=is_exhausted)
 
     def _qidian_catalog(self, bid: str) -> List[Dict[str, Any]]:
         try:
             html = self.qidian.fetch_url(
                 f"https://m.qidian.com/book/{bid}/catalog/", is_mobile=True, encoding="utf-8"
             )
+            if not html or self.qidian.is_waf_challenge(html):
+                print(f"[ContentCrawler] [风控拦截] 起点目录命中 WAF 挑战或内容为空: bid={bid}")
+                return []
             m = re.search(
                 r'<script id="vite-plugin-ssr_pageContext" type="application/json">(.*?)</script>',
                 html, re.S,
@@ -342,6 +371,9 @@ class ContentCrawler:
             html = self.qidian.fetch_url(
                 f"https://m.qidian.com/chapter/{bid}/{cid}/", is_mobile=True, encoding="utf-8"
             )
+            if not html or self.qidian.is_waf_challenge(html):
+                print(f"[ContentCrawler] [风控拦截] 起点章节命中 WAF 挑战: bid={bid}, cid={cid}")
+                return None
             m = re.search(
                 r'<script id="vite-plugin-ssr_pageContext" type="application/json">(.*?)</script>',
                 html, re.S,
@@ -353,7 +385,8 @@ class ContentCrawler:
             free = int(info.get("vipStatus") or 0) == 0
             content = _clean_text(info.get("content") or "") if free else ""
             return content, info.get("chapterName", ""), int(info.get("wordsCount") or 0), free
-        except Exception:
+        except Exception as e:
+            print(f"[ContentCrawler] 起点章节失败 {bid}/{cid}: {e}")
             return None
 
     # ------------------------------------------------------------- 纵横
@@ -361,9 +394,13 @@ class ContentCrawler:
         bid = (book.book_id or "").strip()
         chapters: List[NovelChapter] = []
         if not bid:
-            return self._result(chapters, 0, 0)
+            return self._result(chapters, 0, 0, exhausted=False)
 
         catalog = self._zongheng_catalog(bid)
+        if not catalog:
+            # 目录获取失败时绝不标记为 exhausted，防止阻断重试
+            return self._result(chapters, 0, 0, exhausted=False)
+
         for i, item in enumerate(catalog[: self.max_titles], 1):
             chapters.append(NovelChapter(
                 platform=book.platform, book_id=bid, chapter_index=i,
@@ -374,25 +411,49 @@ class ContentCrawler:
             ))
 
         fetched = 0
+        hit_vip_or_completed = False
+        consecutive_errors = 0
         for i, item in enumerate(catalog, 1):
             if fetched >= self.max_chapters:
+                hit_vip_or_completed = True
                 break
             if item.get("price") not in (0, "0", None):
-                continue  # VIP/付费章节，跳过不请求
+                # 遇到 VIP 章节，停止继续抓取正文
+                hit_vip_or_completed = True
+                break
             cid = str(item.get("chapterId", ""))
             data = self._zongheng_chapter(bid, cid)
             if not data:
+                consecutive_errors += 1
+                if consecutive_errors >= 3:
+                    print(f"[ContentCrawler] 纵横《{book.title}》({bid}) 连续 3 次获取正文失败，保护性中断")
+                    break
                 continue
+            consecutive_errors = 0
             content, name = data
             self._merge_chapter(chapters, book.platform, bid, i, cid, name, content, 0, True)
             if content:
                 fetched += 1
             self._sleep()
 
-        return self._result(chapters, fetched, len(catalog))
+        is_exhausted = hit_vip_or_completed or (consecutive_errors == 0 and fetched > 0)
+        return self._result(chapters, fetched, len(catalog), exhausted=is_exhausted)
 
     def _zongheng_catalog(self, bid: str) -> List[Dict[str, Any]]:
-        page = self._pw_goto(f"https://www.zongheng.com/book/{bid}.html", wait_ms=6000)
+        # 1. 优先调用纵横官方目录直连接口（无风控探针、零前端渲染消耗、毫秒级响应）
+        raw_list = self.zongheng.fetch_catalog(bid)
+        if raw_list:
+            return [
+                it for it in raw_list
+                if it.get("chapterId") and self._is_story_chapter(it.get("chapterName", ""))
+            ]
+
+        # 2. 备用兜底方案：Playwright 浏览器渲染（访问带 tabsName=catalogue 参数的详情页）
+        if not self.use_playwright:
+            print(f"[ContentCrawler] 纵横目录为空 (API未命中且Playwright未启用): {bid}")
+            return []
+
+        page = self._pw_goto(f"https://www.zongheng.com/detail/{bid}?tabsName=catalogue", wait_ms=4000)
         if page is None:
             return []
         script = """() => {
@@ -404,7 +465,7 @@ class ContentCrawler:
             for (const v of vols) out = out.concat(v.chapterViewList || []);
             return out;
         }"""
-        for attempt in range(10):
+        for attempt in range(6):
             try:
                 data = page.evaluate(script)
                 if data:
@@ -444,9 +505,13 @@ class ContentCrawler:
         bid = (book.book_id or "").strip()
         chapters: List[NovelChapter] = []
         if not bid:
-            return self._result(chapters, 0, 0)
+            return self._result(chapters, 0, 0, exhausted=False)
 
         catalog = self._jinjiang_catalog(bid)
+        if not catalog:
+            # 目录获取失败时绝不标记为 exhausted，防止阻断重试
+            return self._result(chapters, 0, 0, exhausted=False)
+
         for i, item in enumerate(catalog[: self.max_titles], 1):
             chapters.append(NovelChapter(
                 platform=book.platform, book_id=bid, chapter_index=i,
@@ -457,22 +522,33 @@ class ContentCrawler:
             ))
 
         fetched = 0
+        hit_vip_or_completed = False
+        consecutive_errors = 0
         for i, item in enumerate(catalog, 1):
             if fetched >= self.max_chapters:
+                hit_vip_or_completed = True
                 break
             if not item.get("is_free", True):
-                continue  # VIP 章节，跳过不请求
+                # 遇到 VIP 章节，停止继续抓取正文
+                hit_vip_or_completed = True
+                break
             cid = str(item.get("chapter_id", ""))
             data = self._jinjiang_chapter(bid, cid)
             if not data:
+                consecutive_errors += 1
+                if consecutive_errors >= 3:
+                    print(f"[ContentCrawler] 晋江《{book.title}》({bid}) 连续 3 次获取正文失败，保护性中断")
+                    break
                 continue
+            consecutive_errors = 0
             content, name = data
             self._merge_chapter(chapters, book.platform, bid, i, cid, name, content, 0, True)
             if content:
                 fetched += 1
             self._sleep()
 
-        return self._result(chapters, fetched, len(catalog))
+        is_exhausted = hit_vip_or_completed or (consecutive_errors == 0 and fetched > 0)
+        return self._result(chapters, fetched, len(catalog), exhausted=is_exhausted)
 
     def _jinjiang_catalog(self, bid: str) -> List[Dict[str, Any]]:
         try:
@@ -480,6 +556,11 @@ class ContentCrawler:
                 f"https://www.jjwxc.net/onebook.php?novelid={bid}",
                 is_mobile=False, encoding="gb18030",
             )
+            if not html:
+                return []
+            if any(sig in html for sig in ("访问过于频繁", "请输入验证码", "滑动验证")) and "oneboolt" not in html:
+                print(f"[ContentCrawler] [风控预警] 晋江目录触发频控或数美验证: bid={bid}")
+                return []
             m = re.search(r'<table[^>]*id=["\']oneboolt["\'].*?</table>', html, re.S | re.I)
             if not m:
                 return []
@@ -488,20 +569,21 @@ class ContentCrawler:
                 hm = re.search(r"chapterid=(\d+)", row)
                 if not hm:
                     continue
-                is_free = not ("[VIP]" in row or "vip" in row.lower())
-                text = _compact(_clean_text(row))
-                words = 0
-                wm = re.search(r"\b(\d{2,6})\b\s+\d{4}-\d{2}-\d{2}", text)
-                if wm:
-                    words = int(wm.group(1))
-                title = re.sub(r"^\d+\s*", "", text.split(" ")[0])
-                title = title.replace("[VIP]", "").strip()
-                result.append({
-                    "chapter_id": hm.group(1),
-                    "title": title,
-                    "words": words,
-                    "is_free": is_free,
-                })
+                cid = hm.group(1)
+                tds = re.findall(r'<td[^>]*>(.*?)</td>', row, re.S)
+                if len(tds) >= 4:
+                    c_idx = _clean_text(tds[0])
+                    c_title = _clean_text(tds[1]).replace("[VIP]", "").strip()
+                    c_words = _clean_text(tds[3]).strip()
+                    is_free = not ("[VIP]" in row or "vip" in row.lower())
+                    title = f"第{c_idx}章 {c_title}" if c_title else f"第{c_idx}章"
+                    words = int(c_words) if c_words.isdigit() else 0
+                    result.append({
+                        "chapter_id": cid,
+                        "title": title,
+                        "words": words,
+                        "is_free": is_free,
+                    })
             # 去重保序
             seen, out = set(), []
             for it in result:
@@ -521,6 +603,11 @@ class ContentCrawler:
             html = self.jinjiang.fetch_url(
                 f"https://m.jjwxc.net/book2/{bid}/{cid}", is_mobile=True, encoding="gb18030"
             )
+            if not html:
+                return None
+            if any(sig in html for sig in ("访问过于频繁", "请输入验证码", "滑动验证")):
+                print(f"[ContentCrawler] [风控预警] 晋江章节触发频控或数美验证: bid={bid}, cid={cid}")
+                return None
             # 目录页/被锁章节：正文通常很短，交给长度阈值过滤
             content = self._largest_text_from_html(html)
             tm = re.search(r"<h[12][^>]*>(.*?)</h[12]>", html, re.S)
@@ -536,9 +623,13 @@ class ContentCrawler:
         bid = (book.book_id or "").strip()
         chapters: List[NovelChapter] = []
         if not bid:
-            return self._result(chapters, 0, 0)
+            return self._result(chapters, 0, 0, exhausted=False)
 
         catalog = self._xiaoxiang_catalog(bid)
+        if not catalog:
+            # 目录获取失败时绝不标记为 exhausted
+            return self._result(chapters, 0, 0, exhausted=False)
+
         for i, item in enumerate(catalog[: self.max_titles], 1):
             is_free = item.get("price") in (0, "0", None)
             chapters.append(NovelChapter(
@@ -549,28 +640,42 @@ class ContentCrawler:
             ))
 
         fetched = 0
+        hit_vip_or_completed = False
+        consecutive_errors = 0
         for i, item in enumerate(catalog, 1):
             if fetched >= self.max_chapters:
+                hit_vip_or_completed = True
                 break
             if item.get("price") not in (0, "0", None):
-                continue  # VIP/付费章节，跳过不请求
+                # 遇到 VIP 章节，停止继续抓取正文
+                hit_vip_or_completed = True
+                break
             cid = str(item.get("ccid", ""))
             data = self._xiaoxiang_chapter(bid, cid)
             if not data:
+                consecutive_errors += 1
+                if consecutive_errors >= 3:
+                    print(f"[ContentCrawler] 潇湘《{book.title}》({bid}) 连续 3 次获取正文失败，保护性中断")
+                    break
                 continue
+            consecutive_errors = 0
             content, name, words = data
             self._merge_chapter(chapters, book.platform, bid, i, cid, name, content, words, True)
             if content:
                 fetched += 1
             self._sleep()
 
-        return self._result(chapters, fetched, len(catalog))
+        is_exhausted = hit_vip_or_completed or (consecutive_errors == 0 and fetched > 0)
+        return self._result(chapters, fetched, len(catalog), exhausted=is_exhausted)
 
     def _xiaoxiang_catalog(self, bid: str) -> List[Dict[str, Any]]:
         try:
             html = self.xiaoxiang.fetch_url(
                 f"https://www.xxsy.net/chapterlist/{bid}", is_mobile=False, encoding="utf-8"
             )
+            if not html or self.xiaoxiang.is_waf_challenge(html):
+                print(f"[ContentCrawler] [风控拦截] 潇湘目录命中 WAF 挑战或内容为空: bid={bid}")
+                return []
             m = re.search(
                 r'<script id="vite-plugin-ssr_pageContext" type="application/json">(.*?)</script>',
                 html, re.S,
@@ -602,6 +707,9 @@ class ContentCrawler:
             html = self.xiaoxiang.fetch_url(
                 f"https://www.xxsy.net/chapter/{bid}/{cid}", is_mobile=False, encoding="utf-8"
             )
+            if not html or self.xiaoxiang.is_waf_challenge(html):
+                print(f"[ContentCrawler] [风控拦截] 潇湘章节命中 WAF 挑战: bid={bid}, cid={cid}")
+                return None
             m = re.search(
                 r'<script id="vite-plugin-ssr_pageContext" type="application/json">(.*?)</script>',
                 html, re.S,
@@ -616,6 +724,12 @@ class ContentCrawler:
                 price = 1.0
             if price > 0:
                 return None  # VIP/付费章节，跳过
+
+            # 校验是否被阅文 Fock 动态字体加密 (font == True 或 encrypt == True)
+            if cc.get("encrypt") is True or cc.get("font") is True:
+                print(f"[ContentCrawler] [字体加密] 潇湘章节已被动态字体混淆，跳过: bid={bid}, cid={cid}")
+                return None
+
             content = _clean_text(cc.get("chapterContent") or "")
             title = _compact(cc.get("chapterTitle", ""))
             try:

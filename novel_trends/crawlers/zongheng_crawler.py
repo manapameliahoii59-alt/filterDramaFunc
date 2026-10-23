@@ -7,7 +7,7 @@ novel_trends/crawlers/zongheng_crawler.py
 import re
 import json
 import urllib.parse
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from .base_crawler import BaseNovelCrawler
 from ..models import NovelBook
 
@@ -22,6 +22,40 @@ class ZonghengCrawler(BaseNovelCrawler):
         ("新书榜", 4),
         ("新书订阅榜", 9),
     ]
+
+    def fetch_catalog(self, bid: str) -> List[Dict[str, Any]]:
+        """
+        获取指定书籍的完整章节目录
+        优先直连官方直属接口: POST https://bookapi.zongheng.com/api/chapter/getChapterList
+        零风控探针、零前端渲染消耗、毫秒级响应
+        """
+        api_url = "https://bookapi.zongheng.com/api/chapter/getChapterList"
+        try:
+            params = {"bookId": str(bid).strip()}
+            body_bytes = urllib.parse.urlencode(params).encode('utf-8')
+            custom_headers = {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": "https://www.zongheng.com",
+                "Referer": f"https://www.zongheng.com/detail/{bid}?tabsName=catalogue",
+            }
+            resp_str = self.fetch_url(
+                api_url,
+                is_mobile=False,
+                encoding="utf-8",
+                extra_headers=custom_headers,
+                data=body_bytes
+            )
+            raw = json.loads(resp_str)
+            if raw.get("code") == 0:
+                result = raw.get("result", {})
+                vols = result.get("chapterList", [])
+                out = []
+                for v in vols:
+                    out.extend(v.get("chapterViewList", []))
+                return out
+        except Exception as e:
+            print(f"[ZonghengCrawler] 目录 API 异常: {bid} -> {e}")
+        return []
 
     def fetch_board(self, board_name: str, rank_type: int, max_count: int = 50) -> List[NovelBook]:
         """

@@ -36,3 +36,15 @@ def test_zongheng_crawler_fetch_board_live():
     sub_books = crawler.fetch_board("新书订阅榜", 9, max_count=50)
     assert len(sub_books) >= 1
     assert sub_books[0].rank_name == "新书订阅榜"
+
+
+def test_zongheng_crawler_fetch_catalog_live():
+    crawler = ZonghengCrawler()
+    # 抽测真实作品《明君》(1610880) 的目录接口直连
+    catalog = crawler.fetch_catalog("1610880")
+    assert len(catalog) >= 10
+    first = catalog[0]
+    assert "chapterId" in first
+    assert "chapterName" in first
+    assert "price" in first
+

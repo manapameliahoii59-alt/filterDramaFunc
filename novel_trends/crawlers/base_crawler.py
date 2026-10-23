@@ -21,20 +21,94 @@ from typing import List, Optional, Dict
 from ..models import NovelBook
 
 
-# 真实桌面端 User-Agent 池 (覆盖 Windows / Mac 的主流 Chromium 与 Firefox)
-DESKTOP_UA_POOL = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+# 真实自洽的移动端设备标头配置（杜绝 iOS 携带 Chromium 标头等矛盾特征）
+MOBILE_PROFILES = [
+    {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh-Hans;q=0.9",
+        "Accept-Encoding": "gzip, deflate",
+        # WebKit / iOS Safari 原生不发送 Sec-Ch-Ua
+    },
+    {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh-Hans;q=0.9",
+        "Accept-Encoding": "gzip, deflate",
+    },
+    {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 14; SM-S9180 Build/UP1A.231005.007) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate",
+        "Sec-Ch-Ua": '"Chromium";v="124", "Android WebView";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?1",
+        "Sec-Ch-Ua-Platform": '"Android"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+    },
 ]
 
-# 真实移动端 User-Agent 池 (覆盖 iOS WebKit 与 Android Chrome)
-MOBILE_UA_POOL = [
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.64 Mobile Safari/537.36",
+# 真实自洽的桌面端设备标头配置
+DESKTOP_PROFILES = [
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate",
+        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+    },
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate",
+        "Sec-Ch-Ua": '"Microsoft Edge";v="123", "Chromium";v="123", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+    },
+    {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate",
+        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"macOS"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+    },
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2",
+        "Accept-Encoding": "gzip, deflate",
+        "Upgrade-Insecure-Requests": "1",
+        # Firefox 原生不发送 Sec-Ch-Ua
+    },
 ]
+
+# 兼容保留
+DESKTOP_UA_POOL = [p["User-Agent"] for p in DESKTOP_PROFILES]
+MOBILE_UA_POOL = [p["User-Agent"] for p in MOBILE_PROFILES]
 
 
 class BaseNovelCrawler(ABC):
@@ -75,6 +149,18 @@ class BaseNovelCrawler(ABC):
         delay = random.uniform(self.min_delay, self.max_delay)
         time.sleep(delay)
 
+    @staticmethod
+    def is_waf_challenge(html: str) -> bool:
+        """检测页面是否为腾讯防水墙/Chaos VM 探针挑战页"""
+        if not html:
+            return False
+        # 常见探针与验证码特征
+        if "/C2WF946J0/probe.js" in html or "probev3.js" in html:
+            return True
+        if "TCaptcha.js" in html or "tcaptcha-frame" in html or "/WafCaptcha" in html:
+            return True
+        return False
+
     def fetch_url(
         self,
         url: str,
@@ -86,28 +172,17 @@ class BaseNovelCrawler(ABC):
     ) -> str:
         """
         具备多重风控防御的统一安全请求引擎
-        支持：动态指纹头、自动解压、拟人延时、指数退避智能重试
+        支持：自洽设备指纹头、自动解压、拟人延时、指数退避智能重试、WAF挑战检测
         """
         # 拟人化微延时
         self._apply_random_jitter()
 
-        ua = random.choice(MOBILE_UA_POOL if is_mobile else DESKTOP_UA_POOL)
-        headers = {
-            "User-Agent": ua,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Accept-Encoding": "gzip, deflate",
-            "Sec-Ch-Ua": '"Chromium";v="122", "Not(A:Brand";v="24"',
-            "Sec-Ch-Ua-Mobile": "?1" if is_mobile else "?0",
-            "Sec-Ch-Ua-Platform": '"iOS"' if is_mobile else '"Windows"',
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "same-origin" if referer else "none",
-            "Sec-Fetch-User": "?1",
-            "Upgrade-Insecure-Requests": "1"
-        }
+        profile = random.choice(MOBILE_PROFILES if is_mobile else DESKTOP_PROFILES)
+        headers = dict(profile)
         if referer:
             headers["Referer"] = referer
+            if "Sec-Fetch-Site" in headers:
+                headers["Sec-Fetch-Site"] = "same-origin"
         if extra_headers:
             headers.update(extra_headers)
 
@@ -125,14 +200,20 @@ class BaseNovelCrawler(ABC):
                         except Exception:
                             pass
                     
-                    return raw_bytes.decode(encoding, errors="ignore")
+                    decoded = raw_bytes.decode(encoding, errors="ignore")
+                    if self.is_waf_challenge(decoded):
+                        print(f"[{self.platform_name}] [风控告警] 响应命中 WAF 挑战页 (包含探针或验证码)，退避重试 (第{attempt}次)... URL: {url}")
+                        backoff = (2 ** attempt) + random.uniform(1.0, 3.0)
+                        time.sleep(backoff)
+                        last_error = RuntimeError(f"命中 WAF 挑战页 ({url})")
+                        continue
+                    return decoded
 
             except HTTPError as he:
                 last_error = he
-                # 针对 429 (频率限制) 或 503 (服务端限流) 触发指数退避
-                if he.code in (429, 503, 502):
-                    backoff = (2 ** attempt) + random.uniform(0.5, 1.5)
-                    # print(f"[{self.platform_name}] 触发平台临时限流 ({he.code})，退避等待 {backoff:.1f}s 后重试 (第{attempt}次)...")
+                # 针对 429 (频率限制) 或 503 (服务端限流) 或 403 (临时拦截) 触发指数退避
+                if he.code in (429, 503, 502, 403):
+                    backoff = (2 ** attempt) + random.uniform(1.0, 2.5)
                     time.sleep(backoff)
                 else:
                     # 404 或其他非限流错误不重复重试
